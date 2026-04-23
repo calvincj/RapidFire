@@ -1,10 +1,9 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Lora } from 'next/font/google'
+import { Inter } from 'next/font/google'
 import AuthProvider from './components/AuthProvider'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
-const lora = Lora({ subsets: ['latin'], variable: '--font-lora' })
 
 export const metadata: Metadata = {
   title: 'RapidFire',
@@ -22,8 +21,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="theme-jade font-inter" suppressHydrationWarning>
-      <body className={`${inter.variable} ${lora.variable} antialiased`}>
+    <html lang="en" className="theme-jade" suppressHydrationWarning>
+      <body className={`${inter.variable} antialiased`}>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

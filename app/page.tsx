@@ -1,4 +1,5 @@
 import { getDigest, getAvailableDates } from '@/lib/db'
+import { isGoogleAuthEnabled } from '@/lib/auth'
 import { getPTDate } from '@/lib/fetch-news'
 import DigestClient from './components/DigestClient'
 
@@ -8,6 +9,7 @@ export default function Home() {
   const today = getPTDate()
   const digest = getDigest(today)
   const availableDates = getAvailableDates()
+  const authEnabled = isGoogleAuthEnabled()
 
   return (
     <DigestClient
@@ -15,6 +17,7 @@ export default function Home() {
       initialDate={today}
       availableDates={availableDates}
       todayDate={today}
+      authEnabled={authEnabled}
     />
   )
 }

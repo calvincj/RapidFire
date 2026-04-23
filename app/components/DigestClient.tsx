@@ -14,6 +14,7 @@ interface Props {
   initialDate: string
   availableDates: string[]
   todayDate: string
+  authEnabled: boolean
 }
 
 const THEMES = [
@@ -22,14 +23,7 @@ const THEMES = [
   { id: 'sandstone', label: 'Sandstone Aquamarine',   dot: '#C4894F' },
 ] as const
 
-const FONTS = [
-  { id: 'inter',   label: 'Inter',   style: "var(--font-inter, 'Inter', sans-serif)" },
-  { id: 'futura',  label: 'Futura',  style: "'Futura', 'Century Gothic', 'Trebuchet MS', sans-serif" },
-  { id: 'lora',    label: 'Lora',    style: "var(--font-lora, 'Lora', Georgia, serif)" },
-] as const
-
 type ThemeId = typeof THEMES[number]['id']
-type FontId  = typeof FONTS[number]['id']
 type Mode    = 'read' | 'swipe'
 
 export default function DigestClient({
@@ -37,6 +31,7 @@ export default function DigestClient({
   initialDate,
   availableDates,
   todayDate,
+  authEnabled,
 }: Props) {
   const [digest, setDigest]           = useState<Digest | null>(initialDigest)
   const [currentDate, setCurrentDate] = useState(initialDate)
@@ -45,7 +40,6 @@ export default function DigestClient({
   const [error, setError]             = useState<string | null>(null)
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [theme, setTheme]             = useState<ThemeId>('jade')
-  const [font, setFont]               = useState<FontId>('inter')
   const [mode, setMode]               = useState<Mode>('read')
   const [feedsOpen, setFeedsOpen]     = useState(false)
   const { data: session, status }     = useSession()
@@ -57,21 +51,13 @@ export default function DigestClient({
     localStorage.setItem('theme', t)
   }
 
-  function applyFont(f: FontId) {
-    const el = document.documentElement
-    FONTS.forEach(fo => el.classList.remove(`font-${fo.id}`))
-    el.classList.add(`font-${f}`)
-    localStorage.setItem('font', f)
-  }
-
-  function savePrefs(t: ThemeId, f: FontId) {
+  function savePrefs(t: ThemeId) {
     localStorage.setItem('theme', t)
-    localStorage.setItem('font', f)
     if (session?.user) {
       fetch('/api/preferences', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ theme: t, font: f }),
+        body: JSON.stringify({ theme: t }),
       })
     }
   }
@@ -82,25 +68,19 @@ export default function DigestClient({
     if (session?.user) {
       fetch('/api/preferences')
         .then(r => r.json())
-        .then(({ theme: t, font: f }) => {
+        .then(({ theme: t }) => {
           applyTheme(t as ThemeId)
-          applyFont(f as FontId)
           setTheme(t as ThemeId)
-          setFont(f as FontId)
         })
     } else {
       const savedTheme = (localStorage.getItem('theme') ?? 'jade') as ThemeId
-      const savedFont  = (localStorage.getItem('font')  ?? 'inter') as FontId
       applyTheme(savedTheme)
-      applyFont(savedFont)
       setTheme(savedTheme)
-      setFont(savedFont)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, session?.user?.id])
 
-  const changeTheme = (t: ThemeId) => { setTheme(t); applyTheme(t); savePrefs(t, font) }
-  const changeFont  = (f: FontId)  => { setFont(f);  applyFont(f);  savePrefs(theme, f) }
+  const changeTheme = (t: ThemeId) => { setTheme(t); applyTheme(t); savePrefs(t) }
 
   const triggerFetch = useCallback(async (date: string) => {
     setLoading(true)
@@ -154,12 +134,11 @@ export default function DigestClient({
         <Header
           currentDate={currentDate}
           theme={theme}
-          font={font}
+          authEnabled={authEnabled}
           session={session}
           loading={loading}
           mode={mode}
           onChangeTheme={changeTheme}
-          onChangeFont={changeFont}
           onRefresh={() => triggerFetch(currentDate)}
           onToggleMode={() => setMode('read')}
           onOpenFeeds={() => setFeedsOpen(true)}
@@ -179,12 +158,11 @@ export default function DigestClient({
       <Header
         currentDate={currentDate}
         theme={theme}
-        font={font}
+        authEnabled={authEnabled}
         session={session}
         loading={loading}
         mode={mode}
         onChangeTheme={changeTheme}
-        onChangeFont={changeFont}
         onRefresh={() => triggerFetch(currentDate)}
         onToggleMode={() => digest && setMode('swipe')}
         swipeDisabled={!digest}
@@ -260,13 +238,12 @@ export default function DigestClient({
 interface HeaderProps {
   currentDate: string
   theme: ThemeId
-  font: FontId
+  authEnabled: boolean
   session: ReturnType<typeof useSession>['data']
   loading: boolean
   mode: Mode
   swipeDisabled?: boolean
   onChangeTheme: (t: ThemeId) => void
-  onChangeFont: (f: FontId) => void
   onRefresh: () => void
   onToggleMode: () => void
   onOpenFeeds: () => void
@@ -275,13 +252,12 @@ interface HeaderProps {
 function Header({
   currentDate,
   theme,
-  font,
+  authEnabled,
   session,
   loading,
   mode,
   swipeDisabled,
   onChangeTheme,
-  onChangeFont,
   onRefresh,
   onToggleMode,
   onOpenFeeds,
@@ -325,25 +301,6 @@ function Header({
             ))}
           </div>
 
-          {/* Font switcher */}
-          <div className="flex items-center gap-1">
-            {FONTS.map(f => (
-              <button
-                key={f.id}
-                onClick={() => onChangeFont(f.id)}
-                title={f.label}
-                className="h-6 px-1.5 rounded text-xs transition-colors"
-                style={{
-                  fontFamily: f.style,
-                  backgroundColor: font === f.id ? 'var(--color-accent)' : 'var(--color-surface)',
-                  color:           font === f.id ? 'var(--color-accent-text)' : 'var(--color-text-2)',
-                }}
-              >
-                Aa
-              </button>
-            ))}
-          </div>
-
           {/* Swipe mode toggle */}
           <div className="relative group">
             <button
@@ -357,7 +314,7 @@ function Header({
             >
               {mode === 'swipe' ? '☰' : '⟐'}
             </button>
-            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
+            <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
               style={{ backgroundColor: 'var(--color-text)', color: 'var(--color-bg)' }}>
               {mode === 'swipe' ? 'Read view' : 'Swipe mode'}
             </span>
@@ -372,7 +329,7 @@ function Header({
             >
               ⚙
             </button>
-            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
+            <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
               style={{ backgroundColor: 'var(--color-text)', color: 'var(--color-bg)' }}>
               Custom feeds
             </span>
@@ -395,8 +352,8 @@ function Header({
             <div className="relative">
               <button
                 onClick={() => setAvatarOpen(v => !v)}
-                className="w-7 h-7 rounded-full overflow-hidden ring-2 transition-opacity hover:opacity-80 shrink-0"
-                style={{ ringColor: 'var(--color-accent)' }}
+                className="w-7 h-7 rounded-full overflow-hidden border-2 transition-opacity hover:opacity-80 shrink-0"
+                style={{ borderColor: 'var(--color-accent)' }}
                 title={session.user.name ?? 'Account'}
               >
                 {session.user.image
@@ -428,7 +385,7 @@ function Header({
                 </div>
               )}
             </div>
-          ) : (
+          ) : authEnabled ? (
             <button
               onClick={() => signIn('google')}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80 shrink-0"
@@ -442,7 +399,7 @@ function Header({
               </svg>
               Sign in
             </button>
-          )}
+          ) : null}
         </div>
       </div>
     </header>

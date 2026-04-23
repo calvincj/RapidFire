@@ -45,13 +45,8 @@
   --color-ring:         #009990;
 }
 
-/* ── Font options ───────────────────────────────────────────── */
-.font-inter   { --font-body: var(--font-inter, 'Inter', sans-serif); }
-.font-futura  { --font-body: 'Futura', 'Century Gothic', 'Trebuchet MS', sans-serif; }
-.font-lora    { --font-body: var(--font-lora, 'Lora', Georgia, serif); }
-
 body {
-  font-family: var(--font-body, var(--font-inter, sans-serif));
+  font-family: var(--font-inter, 'Inter', sans-serif);
   background-color: var(--color-bg);
   color: var(--color-text);
   transition: background-color 0.2s, color 0.2s;
