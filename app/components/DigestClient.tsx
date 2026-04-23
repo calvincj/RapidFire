@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import type { Digest } from '@/lib/types'
 import Calendar from './Calendar'
 import DigestView from './DigestView'
+import SwipeMode from './SwipeMode'
+import FeedsModal from './FeedsModal'
 
 interface Props {
   initialDigest: Digest | null
@@ -13,12 +15,13 @@ interface Props {
 }
 
 const THEMES = [
-  { id: 'jade',      label: 'Jade Pebble Morning',        dot: '#2D6A4F' },
-  { id: 'slate',     label: 'Urban Slate',                dot: '#6B8EC7' },
-  { id: 'sandstone', label: 'Sandstone Aquamarine',       dot: '#009990' },
+  { id: 'jade',      label: 'Jade Pebble Morning',   dot: '#2D6A4F' },
+  { id: 'slate',     label: 'Urban Slate',            dot: '#6B8EC7' },
+  { id: 'sandstone', label: 'Sandstone Aquamarine',   dot: '#009990' },
 ] as const
 
 type ThemeId = typeof THEMES[number]['id']
+type Mode    = 'read' | 'swipe'
 
 export default function DigestClient({
   initialDigest,
@@ -26,13 +29,15 @@ export default function DigestClient({
   availableDates,
   todayDate,
 }: Props) {
-  const [digest, setDigest] = useState<Digest | null>(initialDigest)
+  const [digest, setDigest]           = useState<Digest | null>(initialDigest)
   const [currentDate, setCurrentDate] = useState(initialDate)
-  const [dates, setDates] = useState(availableDates)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [dates, setDates]             = useState(availableDates)
+  const [loading, setLoading]         = useState(false)
+  const [error, setError]             = useState<string | null>(null)
   const [calendarOpen, setCalendarOpen] = useState(false)
-  const [theme, setTheme] = useState<ThemeId>('jade')
+  const [theme, setTheme]             = useState<ThemeId>('jade')
+  const [mode, setMode]               = useState<Mode>('read')
+  const [feedsOpen, setFeedsOpen]     = useState(false)
 
   // Load saved theme on mount
   useEffect(() => {
@@ -72,12 +77,15 @@ export default function DigestClient({
   const loadDate = useCallback(async (date: string) => {
     setCurrentDate(date)
     setCalendarOpen(false)
+    setMode('read')
     setLoading(true)
     setError(null)
     try {
       const res = await fetch(`/api/digest?date=${date}`)
       const data = await res.json()
       setDigest(data.digest as Digest | null)
+      // Always sync available dates so calendar stays accurate
+      setDates(data.availableDates as string[])
     } catch {
       setError('Failed to load digest')
     } finally {
@@ -93,63 +101,44 @@ export default function DigestClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Swipe mode takes over the full screen below the header
+  if (mode === 'swipe' && digest) {
+    return (
+      <div className="min-h-screen" style={{ backgroundColor: 'var(--color-bg)' }}>
+        <Header
+          currentDate={currentDate}
+          theme={theme}
+          loading={loading}
+          mode={mode}
+          onChangeTheme={changeTheme}
+          onRefresh={() => triggerFetch(currentDate)}
+          onToggleMode={() => setMode('read')}
+          onOpenFeeds={() => setFeedsOpen(true)}
+        />
+        <SwipeMode
+          digest={digest}
+          digestDate={currentDate}
+          onExit={() => setMode('read')}
+        />
+        {feedsOpen && <FeedsModal onClose={() => setFeedsOpen(false)} />}
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--color-bg)' }}>
-
-      {/* ── Header ─────────────────────────────────────────── */}
-      <header
-        className="sticky top-0 z-20 backdrop-blur border-b"
-        style={{
-          backgroundColor: 'var(--color-header)',
-          borderColor: 'var(--color-border)',
-        }}
-      >
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h1
-              className="text-xl font-bold tracking-tight leading-none"
-              style={{ color: 'var(--color-text)' }}
-            >
-              Daily Digest
-            </h1>
-            <p className="text-xs mt-1" style={{ color: 'var(--color-text-2)' }}>
-              {formatDate(currentDate)}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3 shrink-0">
-            {/* Theme picker */}
-            <div className="flex items-center gap-1.5">
-              {THEMES.map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => changeTheme(t.id)}
-                  title={t.label}
-                  className="w-5 h-5 rounded-full transition-transform active:scale-90"
-                  style={{
-                    backgroundColor: t.dot,
-                    outline: theme === t.id ? `2px solid ${t.dot}` : '2px solid transparent',
-                    outlineOffset: '2px',
-                  }}
-                />
-              ))}
-            </div>
-
-            {/* Refresh */}
-            <button
-              onClick={() => triggerFetch(currentDate)}
-              disabled={loading}
-              className="px-3 py-2 rounded-xl text-sm font-semibold disabled:opacity-40 active:scale-95 transition-transform"
-              style={{
-                backgroundColor: 'var(--color-accent)',
-                color: 'var(--color-accent-text)',
-              }}
-            >
-              {loading ? 'Loading…' : 'Refresh'}
-            </button>
-          </div>
-        </div>
-      </header>
+      <Header
+        currentDate={currentDate}
+        theme={theme}
+        loading={loading}
+        mode={mode}
+        onChangeTheme={changeTheme}
+        onRefresh={() => triggerFetch(currentDate)}
+        onToggleMode={() => digest && setMode('swipe')}
+        swipeDisabled={!digest}
+        onOpenFeeds={() => setFeedsOpen(true)}
+      />
+      {feedsOpen && <FeedsModal onClose={() => setFeedsOpen(false)} />}
 
       <main className="max-w-2xl mx-auto px-4 pb-16">
 
@@ -161,10 +150,7 @@ export default function DigestClient({
           <button
             onClick={() => setCalendarOpen(v => !v)}
             className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium"
-            style={{
-              backgroundColor: 'var(--color-surface)',
-              color: 'var(--color-text)',
-            }}
+            style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}
           >
             <span>📅 Browse past dates</span>
             <span style={{ color: 'var(--color-text-muted)' }}>
@@ -173,10 +159,7 @@ export default function DigestClient({
           </button>
 
           {calendarOpen && (
-            <div
-              className="px-3 pb-3"
-              style={{ backgroundColor: 'var(--color-surface)' }}
-            >
+            <div className="px-3 pb-3" style={{ backgroundColor: 'var(--color-surface)' }}>
               <Calendar
                 availableDates={dates}
                 selectedDate={currentDate}
@@ -189,12 +172,9 @@ export default function DigestClient({
 
         {/* ── Error ────────────────────────────────────────── */}
         {error && (
-          <div className="mb-5 p-4 rounded-xl border text-sm leading-relaxed"
-            style={{
-              backgroundColor: 'var(--color-surface)',
-              borderColor: '#e57373',
-              color: '#c62828',
-            }}
+          <div
+            className="mb-5 p-4 rounded-xl border text-sm leading-relaxed"
+            style={{ backgroundColor: 'var(--color-surface)', borderColor: '#ef4444', color: '#c62828' }}
           >
             {error}
           </div>
@@ -220,6 +200,108 @@ export default function DigestClient({
         )}
       </main>
     </div>
+  )
+}
+
+// ── Shared header ─────────────────────────────────────────────────────────────
+
+interface HeaderProps {
+  currentDate: string
+  theme: ThemeId
+  loading: boolean
+  mode: Mode
+  swipeDisabled?: boolean
+  onChangeTheme: (t: ThemeId) => void
+  onRefresh: () => void
+  onToggleMode: () => void
+  onOpenFeeds: () => void
+}
+
+function Header({
+  currentDate,
+  theme,
+  loading,
+  mode,
+  swipeDisabled,
+  onChangeTheme,
+  onRefresh,
+  onToggleMode,
+  onOpenFeeds,
+}: HeaderProps) {
+  return (
+    <header
+      className="sticky top-0 z-20 backdrop-blur border-b"
+      style={{ backgroundColor: 'var(--color-header)', borderColor: 'var(--color-border)' }}
+    >
+      <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1
+            className="text-xl font-bold tracking-tight leading-none"
+            style={{ color: 'var(--color-text)' }}
+          >
+            RapidFire
+          </h1>
+          <p className="text-xs mt-1" style={{ color: 'var(--color-text-2)' }}>
+            {formatDate(currentDate)}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Theme dots */}
+          <div className="flex items-center gap-1.5">
+            {THEMES.map(t => (
+              <button
+                key={t.id}
+                onClick={() => onChangeTheme(t.id)}
+                title={t.label}
+                className="w-4 h-4 rounded-full transition-transform active:scale-90"
+                style={{
+                  backgroundColor: t.dot,
+                  outline: theme === t.id ? `2px solid ${t.dot}` : '2px solid transparent',
+                  outlineOffset: '2px',
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Swipe mode toggle */}
+          <button
+            onClick={onToggleMode}
+            disabled={swipeDisabled}
+            title={mode === 'swipe' ? 'Switch to read view' : 'Switch to swipe mode'}
+            className="w-8 h-8 flex items-center justify-center rounded-xl text-base transition-colors disabled:opacity-30"
+            style={{
+              backgroundColor: mode === 'swipe' ? 'var(--color-accent)' : 'var(--color-surface)',
+              color:           mode === 'swipe' ? 'var(--color-accent-text)' : 'var(--color-text-2)',
+            }}
+          >
+            {mode === 'swipe' ? '☰' : '⟐'}
+          </button>
+
+          {/* Feeds settings */}
+          <button
+            onClick={onOpenFeeds}
+            title="Manage custom RSS feeds"
+            className="w-8 h-8 flex items-center justify-center rounded-xl text-base transition-colors"
+            style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text-2)' }}
+          >
+            ⚙
+          </button>
+
+          {/* Refresh — hidden in swipe mode */}
+          {mode === 'read' && (
+            <button
+              onClick={onRefresh}
+              disabled={loading}
+              className="px-3 py-2 rounded-xl text-sm font-semibold disabled:opacity-40 active:scale-95 transition-transform"
+              style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+            >
+              {loading ? 'Loading…' : 'Refresh'}
+            </button>
+          )}
+        </div>
+      </div>
+    </header>
   )
 }
 

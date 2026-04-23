@@ -1,6 +1,7 @@
 export interface Bullet {
   text: string
   url: string
+  imageUrl?: string
 }
 
 export interface Category {
