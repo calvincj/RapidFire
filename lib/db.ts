@@ -38,6 +38,12 @@ function getDb(): Database.Database {
       title       TEXT    NOT NULL DEFAULT '',
       created_at  INTEGER NOT NULL DEFAULT (unixepoch())
     );
+
+    CREATE TABLE IF NOT EXISTS user_prefs (
+      user_id  TEXT PRIMARY KEY,
+      theme    TEXT NOT NULL DEFAULT 'jade',
+      font     TEXT NOT NULL DEFAULT 'inter'
+    );
   `)
 
   return db
@@ -113,6 +119,21 @@ export function addCustomFeed(url: string, title: string): CustomFeed {
 
 export function deleteCustomFeed(id: number): void {
   getDb().prepare('DELETE FROM custom_feeds WHERE id = ?').run(id)
+}
+
+// ── User preferences ──────────────────────────────────────────────────────────
+
+export function getUserPrefs(userId: string): { theme: string; font: string } {
+  const row = getDb()
+    .prepare('SELECT theme, font FROM user_prefs WHERE user_id = ?')
+    .get(userId) as { theme: string; font: string } | undefined
+  return row ?? { theme: 'jade', font: 'inter' }
+}
+
+export function setUserPrefs(userId: string, theme: string, font: string): void {
+  getDb()
+    .prepare('INSERT OR REPLACE INTO user_prefs (user_id, theme, font) VALUES (?, ?, ?)')
+    .run(userId, theme, font)
 }
 
 export function getCategoryPreferences(): Record<string, CategoryPreference> {

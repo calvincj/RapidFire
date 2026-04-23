@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Image from 'next/image'
+import { useSession, signIn, signOut } from 'next-auth/react'
 import type { Digest } from '@/lib/types'
 import Calendar from './Calendar'
 import DigestView from './DigestView'
@@ -15,12 +17,19 @@ interface Props {
 }
 
 const THEMES = [
-  { id: 'jade',      label: 'Jade Pebble Morning',   dot: '#2D6A4F' },
-  { id: 'slate',     label: 'Urban Slate',            dot: '#6B8EC7' },
-  { id: 'sandstone', label: 'Sandstone Aquamarine',   dot: '#009990' },
+  { id: 'jade',      label: 'Jade Pebble Morning',   dot: '#7CBB94' },
+  { id: 'slate',     label: 'Urban Slate',            dot: '#243352' },
+  { id: 'sandstone', label: 'Sandstone Aquamarine',   dot: '#C4894F' },
+] as const
+
+const FONTS = [
+  { id: 'inter',   label: 'Inter',   style: "var(--font-inter, 'Inter', sans-serif)" },
+  { id: 'futura',  label: 'Futura',  style: "'Futura', 'Century Gothic', 'Trebuchet MS', sans-serif" },
+  { id: 'lora',    label: 'Lora',    style: "var(--font-lora, 'Lora', Georgia, serif)" },
 ] as const
 
 type ThemeId = typeof THEMES[number]['id']
+type FontId  = typeof FONTS[number]['id']
 type Mode    = 'read' | 'swipe'
 
 export default function DigestClient({
@@ -36,25 +45,62 @@ export default function DigestClient({
   const [error, setError]             = useState<string | null>(null)
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [theme, setTheme]             = useState<ThemeId>('jade')
+  const [font, setFont]               = useState<FontId>('inter')
   const [mode, setMode]               = useState<Mode>('read')
   const [feedsOpen, setFeedsOpen]     = useState(false)
-
-  // Load saved theme on mount
-  useEffect(() => {
-    const saved = (localStorage.getItem('theme') ?? 'jade') as ThemeId
-    applyTheme(saved)
-    setTheme(saved)
-  }, [])
+  const { data: session, status }     = useSession()
 
   function applyTheme(t: ThemeId) {
-    document.documentElement.className = `theme-${t}`
+    const el = document.documentElement
+    THEMES.forEach(th => el.classList.remove(`theme-${th.id}`))
+    el.classList.add(`theme-${t}`)
     localStorage.setItem('theme', t)
   }
 
-  const changeTheme = (t: ThemeId) => {
-    setTheme(t)
-    applyTheme(t)
+  function applyFont(f: FontId) {
+    const el = document.documentElement
+    FONTS.forEach(fo => el.classList.remove(`font-${fo.id}`))
+    el.classList.add(`font-${f}`)
+    localStorage.setItem('font', f)
   }
+
+  function savePrefs(t: ThemeId, f: FontId) {
+    localStorage.setItem('theme', t)
+    localStorage.setItem('font', f)
+    if (session?.user) {
+      fetch('/api/preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: t, font: f }),
+      })
+    }
+  }
+
+  // Load prefs: from DB when signed in, localStorage when not
+  useEffect(() => {
+    if (status === 'loading') return
+    if (session?.user) {
+      fetch('/api/preferences')
+        .then(r => r.json())
+        .then(({ theme: t, font: f }) => {
+          applyTheme(t as ThemeId)
+          applyFont(f as FontId)
+          setTheme(t as ThemeId)
+          setFont(f as FontId)
+        })
+    } else {
+      const savedTheme = (localStorage.getItem('theme') ?? 'jade') as ThemeId
+      const savedFont  = (localStorage.getItem('font')  ?? 'inter') as FontId
+      applyTheme(savedTheme)
+      applyFont(savedFont)
+      setTheme(savedTheme)
+      setFont(savedFont)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, session?.user?.id])
+
+  const changeTheme = (t: ThemeId) => { setTheme(t); applyTheme(t); savePrefs(t, font) }
+  const changeFont  = (f: FontId)  => { setFont(f);  applyFont(f);  savePrefs(theme, f) }
 
   const triggerFetch = useCallback(async (date: string) => {
     setLoading(true)
@@ -108,9 +154,12 @@ export default function DigestClient({
         <Header
           currentDate={currentDate}
           theme={theme}
+          font={font}
+          session={session}
           loading={loading}
           mode={mode}
           onChangeTheme={changeTheme}
+          onChangeFont={changeFont}
           onRefresh={() => triggerFetch(currentDate)}
           onToggleMode={() => setMode('read')}
           onOpenFeeds={() => setFeedsOpen(true)}
@@ -130,9 +179,12 @@ export default function DigestClient({
       <Header
         currentDate={currentDate}
         theme={theme}
+        font={font}
+        session={session}
         loading={loading}
         mode={mode}
         onChangeTheme={changeTheme}
+        onChangeFont={changeFont}
         onRefresh={() => triggerFetch(currentDate)}
         onToggleMode={() => digest && setMode('swipe')}
         swipeDisabled={!digest}
@@ -154,7 +206,7 @@ export default function DigestClient({
           >
             <span>📅 Browse past dates</span>
             <span style={{ color: 'var(--color-text-muted)' }}>
-              {calendarOpen ? '▴' : '▾'}
+              {calendarOpen ? '•' : '◦'}
             </span>
           </button>
 
@@ -208,10 +260,13 @@ export default function DigestClient({
 interface HeaderProps {
   currentDate: string
   theme: ThemeId
+  font: FontId
+  session: ReturnType<typeof useSession>['data']
   loading: boolean
   mode: Mode
   swipeDisabled?: boolean
   onChangeTheme: (t: ThemeId) => void
+  onChangeFont: (f: FontId) => void
   onRefresh: () => void
   onToggleMode: () => void
   onOpenFeeds: () => void
@@ -220,14 +275,19 @@ interface HeaderProps {
 function Header({
   currentDate,
   theme,
+  font,
+  session,
   loading,
   mode,
   swipeDisabled,
   onChangeTheme,
+  onChangeFont,
   onRefresh,
   onToggleMode,
   onOpenFeeds,
 }: HeaderProps) {
+  const [avatarOpen, setAvatarOpen] = useState(false)
+
   return (
     <header
       className="sticky top-0 z-20 backdrop-blur border-b"
@@ -236,9 +296,10 @@ function Header({
       <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h1
-            className="text-xl font-bold tracking-tight leading-none"
+            className="text-xl font-bold tracking-tight leading-none flex items-center gap-2"
             style={{ color: 'var(--color-text)' }}
           >
+            <Image src="/images/logo.png" alt="RapidFire" width={30} height={28} className="rounded-md" />
             RapidFire
           </h1>
           <p className="text-xs mt-1" style={{ color: 'var(--color-text-2)' }}>
@@ -264,29 +325,58 @@ function Header({
             ))}
           </div>
 
+          {/* Font switcher */}
+          <div className="flex items-center gap-1">
+            {FONTS.map(f => (
+              <button
+                key={f.id}
+                onClick={() => onChangeFont(f.id)}
+                title={f.label}
+                className="h-6 px-1.5 rounded text-xs transition-colors"
+                style={{
+                  fontFamily: f.style,
+                  backgroundColor: font === f.id ? 'var(--color-accent)' : 'var(--color-surface)',
+                  color:           font === f.id ? 'var(--color-accent-text)' : 'var(--color-text-2)',
+                }}
+              >
+                Aa
+              </button>
+            ))}
+          </div>
+
           {/* Swipe mode toggle */}
-          <button
-            onClick={onToggleMode}
-            disabled={swipeDisabled}
-            title={mode === 'swipe' ? 'Switch to read view' : 'Switch to swipe mode'}
-            className="w-8 h-8 flex items-center justify-center rounded-xl text-base transition-colors disabled:opacity-30"
-            style={{
-              backgroundColor: mode === 'swipe' ? 'var(--color-accent)' : 'var(--color-surface)',
-              color:           mode === 'swipe' ? 'var(--color-accent-text)' : 'var(--color-text-2)',
-            }}
-          >
-            {mode === 'swipe' ? '☰' : '⟐'}
-          </button>
+          <div className="relative group">
+            <button
+              onClick={onToggleMode}
+              disabled={swipeDisabled}
+              className="w-8 h-8 flex items-center justify-center rounded-xl text-base transition-colors disabled:opacity-30"
+              style={{
+                backgroundColor: mode === 'swipe' ? 'var(--color-accent)' : 'var(--color-surface)',
+                color:           mode === 'swipe' ? 'var(--color-accent-text)' : 'var(--color-text-2)',
+              }}
+            >
+              {mode === 'swipe' ? '☰' : '⟐'}
+            </button>
+            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
+              style={{ backgroundColor: 'var(--color-text)', color: 'var(--color-bg)' }}>
+              {mode === 'swipe' ? 'Read view' : 'Swipe mode'}
+            </span>
+          </div>
 
           {/* Feeds settings */}
-          <button
-            onClick={onOpenFeeds}
-            title="Manage custom RSS feeds"
-            className="w-8 h-8 flex items-center justify-center rounded-xl text-base transition-colors"
-            style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text-2)' }}
-          >
-            ⚙
-          </button>
+          <div className="relative group">
+            <button
+              onClick={onOpenFeeds}
+              className="w-8 h-8 flex items-center justify-center rounded-xl text-base transition-colors"
+              style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text-2)' }}
+            >
+              ⚙
+            </button>
+            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
+              style={{ backgroundColor: 'var(--color-text)', color: 'var(--color-bg)' }}>
+              Custom feeds
+            </span>
+          </div>
 
           {/* Refresh — hidden in swipe mode */}
           {mode === 'read' && (
@@ -297,6 +387,60 @@ function Header({
               style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
             >
               {loading ? 'Loading…' : 'Refresh'}
+            </button>
+          )}
+
+          {/* Auth */}
+          {session?.user ? (
+            <div className="relative">
+              <button
+                onClick={() => setAvatarOpen(v => !v)}
+                className="w-7 h-7 rounded-full overflow-hidden ring-2 transition-opacity hover:opacity-80 shrink-0"
+                style={{ ringColor: 'var(--color-accent)' }}
+                title={session.user.name ?? 'Account'}
+              >
+                {session.user.image
+                  ? <Image src={session.user.image} alt="avatar" width={28} height={28} />
+                  : <span className="w-full h-full flex items-center justify-center text-xs font-bold"
+                      style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>
+                      {session.user.name?.[0] ?? '?'}
+                    </span>
+                }
+              </button>
+              {avatarOpen && (
+                <div
+                  className="absolute right-0 top-full mt-2 w-48 rounded-xl border shadow-lg p-3 z-30 flex flex-col gap-2"
+                  style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+                >
+                  <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                    {session.user.name}
+                  </p>
+                  <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
+                    {session.user.email}
+                  </p>
+                  <button
+                    onClick={() => signOut()}
+                    className="mt-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
+                    style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+                  >
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={() => signIn('google')}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80 shrink-0"
+              style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text-2)' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              Sign in
             </button>
           )}
         </div>
