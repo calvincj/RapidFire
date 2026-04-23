@@ -61,13 +61,18 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
     if (slide || !current) return
     setSlide(reaction)
 
-    const res = await fetch('/api/reaction', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: current.url, category: current.category, reaction, digestDate }),
-    })
-    const data = await res.json()
-    if (data.preferences) setPreferences(data.preferences)
+    try {
+      const res = await fetch('/api/reaction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: current.url, category: current.category, reaction, digestDate }),
+      })
+
+      const data = await res.json()
+      if (data.preferences) setPreferences(data.preferences)
+    } catch (err) {
+      console.error('[swipe-mode] Failed to save reaction:', err)
+    }
 
     setTimeout(() => {
       setHistory(h => [...h, index])

@@ -3,7 +3,20 @@ import path from 'path'
 import fs from 'fs'
 import type { Digest } from './types'
 
-const DB_PATH = path.join(process.cwd(), 'data', 'digest.db')
+function resolveDbPath(): string {
+  if (process.env.RAPIDFIRE_DB_PATH) {
+    return process.env.RAPIDFIRE_DB_PATH
+  }
+
+  // Vercel's deployed filesystem is read-only except for /tmp.
+  if (process.env.VERCEL) {
+    return path.join('/tmp', 'rapidfire', 'digest.db')
+  }
+
+  return path.join(process.cwd(), 'data', 'digest.db')
+}
+
+const DB_PATH = resolveDbPath()
 
 let db: Database.Database | null = null
 
