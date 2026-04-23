@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Jade Pebble Morning (default) ─────────────────────────── */
+:root,
+.theme-jade {
+  --color-bg:           #F4F8F5;
+  --color-surface:      #E8F2EA;
+  --color-border:       #B8D4B4;
+  --color-accent:       #2D6A4F;
+  --color-accent-text:  #ffffff;
+  --color-text:         #0A0A0A;
+  --color-text-2:       #2E4A3C;
+  --color-text-muted:   #7A9E8A;
+  --color-header:       rgba(244, 248, 245, 0.96);
+  --color-ring:         #2D6A4F;
+}
+
+/* ── Urban Slate ────────────────────────────────────────────── */
+.theme-slate {
+  --color-bg:           #141924;
+  --color-surface:      #1C2333;
+  --color-border:       #2C3850;
+  --color-accent:       #6B8EC7;
+  --color-accent-text:  #0A0F1A;
+  --color-text:         #DDE4F2;
+  --color-text-2:       #8898BA;
+  --color-text-muted:   #445270;
+  --color-header:       rgba(20, 25, 36, 0.96);
+  --color-ring:         #6B8EC7;
+}
+
+/* ── Sandstone Aquamarine Serenity ──────────────────────────── */
+.theme-sandstone {
+  --color-bg:           #F5EDE0;
+  --color-surface:      #EDE0CA;
+  --color-border:       #C8A87A;
+  --color-accent:       #009990;
+  --color-accent-text:  #ffffff;
+  --color-text:         #1A0F06;
+  --color-text-2:       #5A3D28;
+  --color-text-muted:   #9E7A56;
+  --color-header:       rgba(245, 237, 224, 0.96);
+  --color-ring:         #009990;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  transition: background-color 0.2s, color 0.2s;
+}
