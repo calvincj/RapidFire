@@ -159,12 +159,9 @@ async function fetchNewsAPIHeadlines(): Promise<RawArticle[]> {
   return articles
 }
 
-// ── Groq categorization ──────────────────────────────────────────────────────
+// ── LLM categorization ───────────────────────────────────────────────────────
 
-async function categorizeWithGroq(articles: RawArticle[], date: string): Promise<Digest> {
-  const apiKey = process.env.GROQ_API_KEY
-  if (!apiKey) throw new Error('GROQ_API_KEY is not configured')
-
+function buildCategorizeInput(articles: RawArticle[]): { selected: RawArticle[]; headlinesText: string; systemPrompt: string } {
   // Keep input under 12k TPM free-tier limit: ~2k system + 60 articles×46t + 4k output ≈ 9k
   const selected = articles.slice(0, 60)
 
@@ -196,22 +193,53 @@ PREFER stories with a concrete contemporary development:
 - a central bank, treasury, or regulator decision
 - an official company action with public consequences such as layoffs, mergers, bans, recalls, or plant closures
 
-AVOID choosing stories whose main news value is that someone "said", "warned", "signaled", "expects", or "feels" something unless the speaker is a head of state, central bank chief, cabinet minister, top regulator, or equivalent decision-maker and the statement itself moves policy or markets.
+AVOID choosing stories whose main news value is that someone "said", "warned", "signaled", "expects", "claims", or "feels" something unless the speaker is a head of state, central bank chief, cabinet minister, top regulator, or equivalent decision-maker and the statement itself moves policy, markets, law, diplomacy, or military posture.
 
-STEP 2 — WRITE a 1–2 sentence summary that a general audience with no prior context can understand:
-- Sentence 1: Say what happened, with numbers and names. Example: "The Federal Reserve held interest rates steady at 4.25–4.5%, its benchmark borrowing rate, citing persistent inflation."
-- Sentence 2 (when needed): Explain why it matters or what it means for ordinary people. Example: "Higher rates make mortgages, car loans, and credit cards more expensive."
-- ALWAYS define acronyms and jargon on first use — never assume the reader knows what S&P 500, Nasdaq, M&A, CPI, FOMC, PBoC, or any index/agency/abbreviation means. Write it out: "the S&P 500, a stock index tracking 500 large US companies" or "M&A (merger and acquisition activity)".
-- ALWAYS identify organizations and institutions that are not universally known. Example: write "AmCham China, a business lobby representing American companies in China," not just "AmCham China."
-- ALWAYS explain abstract words like "security", "reform", "support", "controls", or "pressure" by saying what they actually refer to in the story.
-- ALWAYS identify who companies are if they are not household names: not "Deutsche Telekom" but "Deutsche Telekom, Germany's state-backed phone carrier".
+FILTER OUT pure rhetoric stories with little factual value:
+- campaign-style taunts, boasts, grievances, or fraud claims
+- provocative quotes that do not announce a policy, order, sanction, vote, lawsuit, meeting outcome, or military move
+- personality-driven political drama without a concrete consequence
+
+STEP 2 — DEDUPLICATE before writing any summaries:
+Scan all headlines for articles that describe the same real-world event. Two articles are duplicates if they cover the same action (announcement, ruling, vote, decision, military move, arrest, etc.) by the same actor at the same time — even if the wording is completely different.
+
+For each group of 2 or more duplicate articles:
+- Choose the single most specific or detailed URL as the canonical source
+- You will write ONE bullet for the group (in STEP 3), combining the best details from all articles in the group
+- All other URLs in the group are discarded — they must NOT appear anywhere in the output
+
+Do NOT produce two bullets that describe the same underlying event under any circumstances, even if they would fall in different categories.
+
+Examples of same-event pairs that MUST produce only ONE bullet:
+- "Iran FM heads to Pakistan, downplaying US talks" + "Iran FM embarks on three-nation tour as US peace talks stall" → same diplomatic trip, ONE bullet using whichever URL is more detailed
+- "DOJ drops criminal probe of Powell" + "US drops criminal investigation of Fed chair Powell, clearing way for Warsh" → same decision, ONE bullet
+- "China raises tariffs on US goods to 125%" + "Beijing retaliates with 125% tariff on American imports" → same action, ONE bullet
+
+STEP 3 — WRITE a 1–2 sentence summary for a smart college-aged reader who follows current events:
+- Keep it readable, not minimal. Target roughly 22-40 words. Use a second sentence when needed for context, but every sentence must earn its place.
+- Sentence 1: state the concrete development with names, numbers, and timing.
+- Sentence 2, if used: explain what changed, why it matters, or what the disputed issue actually is.
+- For bullets that merge multiple sources (from STEP 2), draw on all source articles to write a richer, more complete summary.
+- Assume the reader knows basic international affairs and major countries, leaders, and institutions. Do NOT over-explain common concepts like Beijing, Taipei, NATO, the European Union, Congress, or tariffs.
+- DO explain niche acronyms, obscure institutions, and lesser-known companies on first mention.
+- ALWAYS define acronyms and jargon on first use when they are not broadly known. Example: write "M&A (mergers and acquisitions)" or "AmCham China, a business lobby for American companies in China."
+- ONLY explain a term like "security", "pressure", "controls", or "support" when the article depends on that detail. If you use the term, name the specific issue.
+- ALWAYS identify companies if they are not household names.
 - NEVER write a summary so vague that a reader could ask "what policy?" or "what security issue?" Fill in the missing noun.
+- NEVER use placeholder nouns without substance. Bad: "the tariff refund process has begun for businesses." Good: say who is refunding which tariffs to which businesses, under what ruling or policy change.
+- Prefer one concrete noun over a vague bundle. Replace "issues" with the actual items: tariffs, chip export controls, visa restrictions, military talks, or whatever the story is really about.
+- NEVER use filler phrases like "various issues, including", "in a move seen as", "has been seeking to", "amid ongoing tensions", or "according to observers".
+- Prefer direct wording: use "praised" instead of "hailed", "said" instead of "signaled", "met" instead of "held talks" when that is what happened.
+- Use "the" for a specific known event when appropriate, for example "the May summit", not "a May summit".
+- Avoid obvious throat-clearing or scene-setting clauses unless they add essential new information.
+- Avoid generic backstory the reader already knows unless it is necessary to understand the event.
+- Do include enough context that the sentence stands on its own. The reader should not need the headline to understand what happened.
 - If the underlying article is mostly opinion, vague analysis, or low-information commentary, do not include it.
-- Use your own knowledge to add context — do not just rephrase the headline.
+- Use your own knowledge to add context, but keep it brief and concrete.
 - Never start with: "Report:", "Sources say:", "Exclusive:", or similar hedges.
 - No metaphors, dramatic phrasing, or creative titles ("Art of AI War", "Delicate Extraction", etc.).
 
-STEP 3 — SELECT the 3 Headliners using this strict priority order (highest first):
+STEP 4 — SELECT the 3 Headliners using this strict priority order (highest first):
   1. Active armed conflict, military strikes, or ceasefire agreements
   2. Decisions by heads of state, major legislation passed or signed into law
   3. Major diplomatic events: sanctions, treaty signings, ambassador expulsions, summits
@@ -220,8 +248,8 @@ STEP 3 — SELECT the 3 Headliners using this strict priority order (highest fir
   6. Critical technology or AI policy with broad national or global implications
   7. Serious supply chain disruptions for critical minerals or energy
 
-STEP 4 — SORT into EXACTLY these 8 categories using these EXACT names and definitions:
-- "Headliner" — the 3 most globally significant stories (selected in Step 3)
+STEP 5 — SORT into EXACTLY these 8 categories using these EXACT names and definitions:
+- "Headliner" — the 3 most globally significant stories (selected in Step 4)
 - "International Affairs" — geopolitics and foreign relations BETWEEN countries, excluding US domestic and China domestic stories
 - "Trade" — tariffs, export controls, trade agreements, sanctions, import/export bans
 - "Tech & AI" — technology industry, AI developments, cybersecurity, tech regulation (ONE combined category — never split into "Tech" and "AI" separately)
@@ -239,6 +267,17 @@ STRICT RULES:
 
 Return ONLY valid JSON, no markdown, no explanation:
 { "date": "YYYY-MM-DD", "categories": [{ "name": "...", "bullets": [{ "text": "...", "url": "..." }] }] }`
+
+  return { selected, headlinesText, systemPrompt }
+}
+
+function parseDigestJSON(raw: string): Digest {
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
+  return JSON.parse(cleaned) as Digest
+}
+
+async function categorizeWithGroq(articles: RawArticle[], date: string, apiKey: string): Promise<Digest> {
+  const { headlinesText, systemPrompt } = buildCategorizeInput(articles)
 
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
@@ -263,9 +302,58 @@ Return ONLY valid JSON, no markdown, no explanation:
   const data = await response.json()
   const raw: string = data.choices?.[0]?.message?.content ?? ''
   if (!raw) throw new Error('Empty response from Groq')
+  return parseDigestJSON(raw)
+}
 
-  const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
-  return JSON.parse(cleaned) as Digest
+async function categorizeWithGemini(articles: RawArticle[], date: string, apiKey: string): Promise<Digest> {
+  const { headlinesText, systemPrompt } = buildCategorizeInput(articles)
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: `Date: ${date}\n\nHeadlines:\n\n${headlinesText}` }] }],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 8192,
+          responseMimeType: 'application/json',
+        },
+      }),
+    }
+  )
+
+  if (!response.ok) {
+    const body = await response.text()
+    throw new Error(`Gemini error ${response.status}: ${body}`)
+  }
+
+  const data = await response.json()
+  const raw: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+  if (!raw) throw new Error('Empty response from Gemini')
+  return parseDigestJSON(raw)
+}
+
+async function categorize(articles: RawArticle[], date: string): Promise<Digest> {
+  const groqKey = process.env.GROQ_API_KEY
+  const geminiKey = process.env.GEMINI_API_KEY
+
+  if (groqKey) {
+    try {
+      console.log('[fetch-news] Categorizing with Groq…')
+      return await categorizeWithGroq(articles, date, groqKey)
+    } catch (err) {
+      console.warn('[fetch-news] Groq failed, trying Gemini fallback:', err)
+      if (!geminiKey) throw err
+    }
+  }
+
+  if (!geminiKey) throw new Error('No LLM API key configured. Set GROQ_API_KEY or GEMINI_API_KEY.')
+
+  console.log('[fetch-news] Categorizing with Gemini…')
+  return await categorizeWithGemini(articles, date, geminiKey)
 }
 
 // ── OG image scraping ────────────────────────────────────────────────────────
@@ -315,7 +403,7 @@ async function enrichWithOGImages(digest: Digest): Promise<void> {
 // ── Custom feed fetching ──────────────────────────────────────────────────────
 
 async function fetchCustomFeeds(): Promise<RawArticle[]> {
-  const feeds = getCustomFeeds()
+  const feeds = await getCustomFeeds()
   if (feeds.length === 0) return []
 
   const results = await Promise.allSettled(
@@ -327,9 +415,9 @@ async function fetchCustomFeeds(): Promise<RawArticle[]> {
 
 // Score articles from custom feeds using existing category preferences.
 // Articles from high-liked categories bubble to the top; others are deprioritized.
-function rankCustomArticles(articles: RawArticle[]): RawArticle[] {
+async function rankCustomArticles(articles: RawArticle[]): Promise<RawArticle[]> {
   if (articles.length === 0) return []
-  const prefs = getCategoryPreferences()
+  const prefs = await getCategoryPreferences()
 
   // Average preference score across all rated categories (default 50 = neutral)
   const avgScore = Object.values(prefs).length > 0
@@ -386,7 +474,7 @@ export async function fetchAndSaveDigest(date?: string): Promise<Digest> {
   }
 
   if (customResult.status === 'fulfilled') {
-    const ranked = rankCustomArticles(customResult.value)
+    const ranked = await rankCustomArticles(customResult.value)
     let added = 0
     for (const a of ranked) {
       if (!seen.has(a.url)) { seen.add(a.url); all.push(a); added++ }
@@ -397,8 +485,7 @@ export async function fetchAndSaveDigest(date?: string): Promise<Digest> {
 
   console.log(`[fetch-news] ${all.length} unique articles · ${imageMap.size} with images`)
 
-  console.log('[fetch-news] Categorizing with Groq…')
-  const digest = await categorizeWithGroq(all, targetDate)
+  const digest = await categorize(all, targetDate)
 
   // Server-side dedup: remove any URL that appears in more than one category
   const seenBulletUrls = new Set<string>()
@@ -421,7 +508,7 @@ export async function fetchAndSaveDigest(date?: string): Promise<Digest> {
 
   await enrichWithOGImages(digest)
 
-  saveDigest(targetDate, digest)
+  await saveDigest(targetDate, digest)
   console.log(`[fetch-news] Saved digest for ${targetDate}`)
 
   return digest

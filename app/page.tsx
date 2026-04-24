@@ -5,10 +5,10 @@ import DigestClient from './components/DigestClient'
 
 export const dynamic = 'force-dynamic'
 
-export default function Home() {
+export default async function Home() {
   const today = getPTDate()
-  const digest = getDigest(today)
-  const availableDates = getAvailableDates()
+  const digest = await getDigest(today)
+  const availableDates = await getAvailableDates()
   const authEnabled = isGoogleAuthEnabled()
 
   return (

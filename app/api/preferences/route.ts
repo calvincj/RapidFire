@@ -7,7 +7,7 @@ export async function GET() {
   if (!session?.user?.id) {
     return Response.json({ theme: 'jade' })
   }
-  const { theme } = getUserPrefs(session.user.id)
+  const { theme } = await getUserPrefs(session.user.id)
   return Response.json({ theme })
 }
 
@@ -17,7 +17,7 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const { theme } = await req.json()
-  const { font } = getUserPrefs(session.user.id)
-  setUserPrefs(session.user.id, theme, font)
+  const { font } = await getUserPrefs(session.user.id)
+  await setUserPrefs(session.user.id, theme, font)
   return Response.json({ ok: true })
 }

@@ -182,7 +182,7 @@ export default function DigestClient({
             className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium"
             style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}
           >
-            <span>📅 Browse past dates</span>
+            <span>🗓️ Browse past dates</span>
             <span style={{ color: 'var(--color-text-muted)' }}>
               {calendarOpen ? '•' : '◦'}
             </span>

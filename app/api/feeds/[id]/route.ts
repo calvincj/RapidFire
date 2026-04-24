@@ -9,6 +9,6 @@ export async function DELETE(
 ) {
   const id = parseInt(params.id, 10)
   if (isNaN(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
-  deleteCustomFeed(id)
+  await deleteCustomFeed(id)
   return NextResponse.json({ success: true })
 }

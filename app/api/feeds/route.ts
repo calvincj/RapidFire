@@ -4,7 +4,7 @@ import { getCustomFeeds, addCustomFeed } from '@/lib/db'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  return NextResponse.json({ feeds: getCustomFeeds() })
+  return NextResponse.json({ feeds: await getCustomFeeds() })
 }
 
 export async function POST(request: NextRequest) {
@@ -14,6 +14,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid URL' }, { status: 400 })
   }
 
-  const feed = addCustomFeed(url.trim(), (title ?? '').trim())
+  const feed = await addCustomFeed(url.trim(), (title ?? '').trim())
   return NextResponse.json({ feed })
 }
