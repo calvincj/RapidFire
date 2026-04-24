@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { useSession, signIn, signOut } from 'next-auth/react'
 import type { Digest } from '@/lib/types'
 import Calendar from './Calendar'
@@ -263,20 +264,15 @@ function Header({
   onOpenFeeds,
 }: HeaderProps) {
   const [avatarOpen, setAvatarOpen] = useState(false)
-  const [aboutOpen, setAboutOpen]   = useState(false)
 
   return (
     <header
       className="sticky top-0 z-20 backdrop-blur border-b"
       style={{ backgroundColor: 'var(--color-header)', borderColor: 'var(--color-border)' }}
     >
-      {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
       <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <button
-            onClick={() => setAboutOpen(true)}
-            className="text-left group"
-          >
+          <Link href="/about" className="group">
             <h1
               className="text-xl font-bold tracking-tight leading-none flex items-center gap-2 group-hover:opacity-75 transition-opacity"
               style={{ color: 'var(--color-text)' }}
@@ -284,7 +280,7 @@ function Header({
               <Image src="/images/logo.png" alt="RapidFire" width={30} height={28} className="rounded-md" />
               RapidFire
             </h1>
-          </button>
+          </Link>
           <p className="text-xs mt-1" style={{ color: 'var(--color-text-2)' }}>
             {formatDate(currentDate)}
           </p>
@@ -423,74 +419,3 @@ function formatDate(dateStr: string): string {
   })
 }
 
-function AboutModal({ onClose }: { onClose: () => void }) {
-  const overlayRef = useRef<HTMLDivElement>(null)
-
-  function handleOverlayClick(e: React.MouseEvent) {
-    if (e.target === overlayRef.current) onClose()
-  }
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-
-  return (
-    <div
-      ref={overlayRef}
-      onClick={handleOverlayClick}
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
-    >
-      <div
-        className="relative w-full max-w-md rounded-2xl border p-6 shadow-xl"
-        style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center rounded-full text-sm transition-opacity hover:opacity-60"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
-          ✕
-        </button>
-
-        <div className="flex items-center gap-3 mb-5">
-          <Image src="/images/logo.png" alt="RapidFire" width={36} height={34} className="rounded-lg" />
-          <h2 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>
-            About RapidFire
-          </h2>
-        </div>
-
-        <div className="space-y-4 text-sm leading-relaxed" style={{ color: 'var(--color-text-2)' }}>
-          <p>
-            I built RapidFire because I wanted to stay on top of the news — but most feeds are
-            full of noise. Hot takes, opinion pieces, celebrity drama, sports — it adds up fast,
-            and the actual important stories get buried.
-          </p>
-          <p>
-            RapidFire is a daily briefing that tries to cut through that. Every morning it pulls
-            from multiple sources, runs everything through an AI editor, and surfaces the stories
-            that actually matter: geopolitics, trade, policy, tech, finance.
-          </p>
-          <p>
-            The AI is specifically tuned to filter out opinion columns, analysis pieces, and
-            commentary — it only keeps stories where something concrete happened. A law passed.
-            A sanction was imposed. A court ruled. A deal closed.
-          </p>
-          <p>
-            The goal is a 2-minute skim that tells you what's going on in the world — nothing
-            more, nothing less.
-          </p>
-        </div>
-
-        <div
-          className="mt-5 pt-4 border-t text-xs"
-          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
-        >
-          Sources: NewsAPI · The Guardian · South China Morning Post · your custom RSS feeds
-        </div>
-      </div>
-    </div>
-  )
-}

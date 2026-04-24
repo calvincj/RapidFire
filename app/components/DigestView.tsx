@@ -83,7 +83,7 @@ export default function DigestView({ digest }: { digest: Digest }) {
         >
           <h2
             className="text-xs font-bold tracking-widest uppercase mb-4 flex items-center gap-2"
-            style={{ color: cat.name === 'Headliner' ? 'var(--color-accent)' : 'var(--color-text-2)' }}
+            style={{ color: 'var(--color-text-2)' }}
           >
             <span>{EMOJI[cat.name] ?? '📰'}</span>
             <span>{cat.name}</span>
