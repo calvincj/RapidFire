@@ -41,11 +41,6 @@ function extractRSSImage(item: {
 
 // ── RSS ──────────────────────────────────────────────────────────────────────
 
-const RSS_FEEDS = [
-  { url: 'https://www.scmp.com/rss/4/feed', name: 'SCMP China'  },  // South China Morning Post — China section
-  { url: 'https://www.scmp.com/rss/5/feed', name: 'SCMP World'  },  // South China Morning Post — World section
-]
-
 async function fetchRSSFeed(url: string, name: string): Promise<RawArticle[]> {
   try {
     const feed = await rssParser.parseURL(url)
@@ -159,11 +154,57 @@ async function fetchNewsAPIHeadlines(): Promise<RawArticle[]> {
   return articles
 }
 
+// ── NYT Top Stories API ───────────────────────────────────────────────────────
+
+async function fetchNYTArticles(): Promise<RawArticle[]> {
+  const apiKey = process.env.NYT_API_KEY
+  if (!apiKey) {
+    console.warn('[fetch-news] NYT_API_KEY not set — skipping NYT')
+    return []
+  }
+
+  const sections = ['home', 'world', 'business']
+  const seen = new Set<string>()
+  const articles: RawArticle[] = []
+
+  const results = await Promise.allSettled(
+    sections.map(s =>
+      fetch(`https://api.nytimes.com/svc/topstories/v2/${s}.json?api-key=${apiKey}`, { cache: 'no-store' })
+        .then(r => r.json())
+    )
+  )
+
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      console.warn('[fetch-news] NYT request failed:', result.reason)
+      continue
+    }
+    for (const item of result.value.results ?? []) {
+      if (item.url && item.title && !seen.has(item.url)) {
+        seen.add(item.url)
+        const img: string | null =
+          (item.multimedia as Array<{ url: string; format: string }> | null)
+            ?.find(m => m.format === 'Large Thumbnail')?.url
+          ?? (item.multimedia as Array<{ url: string }> | null)?.[0]?.url
+          ?? null
+        articles.push({
+          title:       item.title,
+          url:         item.url,
+          description: item.abstract ?? null,
+          imageUrl:    img,
+        })
+      }
+    }
+  }
+
+  return articles
+}
+
 // ── LLM categorization ───────────────────────────────────────────────────────
 
 function buildCategorizeInput(articles: RawArticle[]): { selected: RawArticle[]; headlinesText: string; systemPrompt: string } {
-  // Keep input under 12k TPM free-tier limit: ~2k system + 60 articles×46t + 4k output ≈ 9k
-  const selected = articles.slice(0, 60)
+  // 70 articles: ~3k system + 70×46t headlines + 4k output ≈ 10k; fine for Groq and Gemini
+  const selected = articles.slice(0, 70)
 
   const headlinesText = selected
     .map((a, i) => `[${i + 1}] ${a.title}\n    URL: ${a.url}`)
@@ -437,28 +478,44 @@ export async function fetchAndSaveDigest(date?: string): Promise<Digest> {
 
   console.log('[fetch-news] Fetching from all sources in parallel…')
 
-  const [newsAPIResult, guardianResult, scmpChinaResult, scmpWorldResult, customResult] =
-    await Promise.allSettled([
-      fetchNewsAPIHeadlines(),
-      fetchGuardianArticles(),
-      ...RSS_FEEDS.map(f => fetchRSSFeed(f.url, f.name)),
-      fetchCustomFeeds(),
-    ])
+  const [
+    newsAPIResult, guardianResult, nytResult,
+    scmpChinaResult, scmpWorldResult,
+    bbcWorldResult, bbcBusinessResult, alJazeeraResult,
+    customResult,
+  ] = await Promise.allSettled([
+    fetchNewsAPIHeadlines(),
+    fetchGuardianArticles(),
+    fetchNYTArticles(),
+    fetchRSSFeed('https://www.scmp.com/rss/4/feed', 'SCMP China'),
+    fetchRSSFeed('https://www.scmp.com/rss/5/feed', 'SCMP World'),
+    fetchRSSFeed('https://feeds.bbci.co.uk/news/world/rss.xml', 'BBC World'),
+    fetchRSSFeed('https://feeds.bbci.co.uk/news/business/rss.xml', 'BBC Business'),
+    fetchRSSFeed('https://www.aljazeera.com/xml/rss/all.xml', 'Al Jazeera'),
+    fetchCustomFeeds(),
+  ])
 
   // Rank custom feed articles before building the main batch so they can be slotted in.
   const customArticles = customResult.status === 'fulfilled'
     ? await rankCustomArticles(customResult.value)
     : []
 
-  // Per-source caps: SCMP China goes first (guaranteed China Politics coverage).
-  // Custom feeds are slotted second so they're always within the 60-article LLM window.
-  // Main sources reduced slightly (50 total) to reserve 10 slots for custom feeds.
+  const bbcArticles = [
+    ...(bbcWorldResult.status    === 'fulfilled' ? bbcWorldResult.value    : []),
+    ...(bbcBusinessResult.status === 'fulfilled' ? bbcBusinessResult.value : []),
+  ]
+
+  // Source order determines priority within the 70-article LLM window.
+  // SCMP China first (guaranteed China Politics); custom feeds second (always visible).
   const sourceBatches: Array<{ articles: RawArticle[]; cap: number; label: string }> = [
-    { articles: scmpChinaResult.status === 'fulfilled' ? scmpChinaResult.value : [],  cap: 12, label: 'SCMP China'    },
-    { articles: customArticles,                                                         cap: 10, label: 'Custom feeds'  },
-    { articles: newsAPIResult.status === 'fulfilled'   ? newsAPIResult.value   : [],  cap: 22, label: 'NewsAPI'       },
-    { articles: guardianResult.status === 'fulfilled'  ? guardianResult.value  : [],  cap: 12, label: 'Guardian'      },
-    { articles: scmpWorldResult.status === 'fulfilled' ? scmpWorldResult.value : [],  cap: 4,  label: 'SCMP World'    },
+    { articles: scmpChinaResult.status === 'fulfilled' ? scmpChinaResult.value : [], cap: 10, label: 'SCMP China'   },
+    { articles: customArticles,                                                        cap: 10, label: 'Custom feeds' },
+    { articles: nytResult.status       === 'fulfilled' ? nytResult.value       : [], cap: 10, label: 'NYT'          },
+    { articles: bbcArticles,                                                           cap:  8, label: 'BBC'          },
+    { articles: alJazeeraResult.status === 'fulfilled' ? alJazeeraResult.value : [], cap:  6, label: 'Al Jazeera'   },
+    { articles: newsAPIResult.status   === 'fulfilled' ? newsAPIResult.value   : [], cap: 14, label: 'NewsAPI'      },
+    { articles: guardianResult.status  === 'fulfilled' ? guardianResult.value  : [], cap:  8, label: 'Guardian'     },
+    { articles: scmpWorldResult.status === 'fulfilled' ? scmpWorldResult.value : [], cap:  4, label: 'SCMP World'   },
   ]
 
   const seen = new Set<string>()

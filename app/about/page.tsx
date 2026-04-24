@@ -126,8 +126,9 @@ export default function AboutPage() {
             Sources
           </h2>
           <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-2)' }}>
-            Headlines come from NewsAPI, The Guardian, and South China Morning Post. You can also
-            add your own RSS feeds in the settings and they get mixed into the daily digest.
+            Headlines come from the New York Times, BBC News, Al Jazeera, The Guardian, NewsAPI,
+            and South China Morning Post. You can also add your own RSS feeds in the settings
+            and they get mixed into the daily digest.
           </p>
         </div>
       </main>

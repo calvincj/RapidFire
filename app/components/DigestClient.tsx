@@ -286,9 +286,9 @@ function Header({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           {/* Theme dots */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 mr-0.5">
             {THEMES.map(t => (
               <button
                 key={t.id}
@@ -309,15 +309,24 @@ function Header({
             <button
               onClick={onToggleMode}
               disabled={swipeDisabled}
-              className="w-8 h-8 flex items-center justify-center rounded-xl text-base transition-colors disabled:opacity-30"
+              aria-label={mode === 'swipe' ? 'Read view' : 'Swipe mode'}
+              className="w-8 h-8 flex items-center justify-center rounded-xl transition-colors disabled:opacity-30"
               style={{
                 backgroundColor: mode === 'swipe' ? 'var(--color-accent)' : 'var(--color-surface)',
                 color:           mode === 'swipe' ? 'var(--color-accent-text)' : 'var(--color-text-2)',
               }}
             >
-              {mode === 'swipe' ? '☰' : '⟐'}
+              {mode === 'swipe' ? (
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                  <line x1="2" y1="5" x2="14" y2="5"/><line x1="2" y1="8" x2="14" y2="8"/><line x1="2" y1="11" x2="14" y2="11"/>
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="1" y="3" width="14" height="10" rx="2"/><line x1="1" y1="7" x2="15" y2="7"/>
+                </svg>
+              )}
             </button>
-            <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
+            <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50"
               style={{ backgroundColor: 'var(--color-text)', color: 'var(--color-bg)' }}>
               {mode === 'swipe' ? 'Read view' : 'Swipe mode'}
             </span>
@@ -327,12 +336,16 @@ function Header({
           <div className="relative group">
             <button
               onClick={onOpenFeeds}
-              className="w-8 h-8 flex items-center justify-center rounded-xl text-base transition-colors"
+              aria-label="Custom feeds"
+              className="w-8 h-8 flex items-center justify-center rounded-xl transition-colors"
               style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text-2)' }}
             >
-              ⚙
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <circle cx="8" cy="8" r="2.5"/>
+                <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.1 3.1l1.05 1.05M11.85 11.85l1.05 1.05M3.1 12.9l1.05-1.05M11.85 4.15l1.05-1.05"/>
+              </svg>
             </button>
-            <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
+            <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50"
               style={{ backgroundColor: 'var(--color-text)', color: 'var(--color-bg)' }}>
               Custom feeds
             </span>
@@ -340,14 +353,28 @@ function Header({
 
           {/* Refresh — hidden in swipe mode */}
           {mode === 'read' && (
-            <button
-              onClick={onRefresh}
-              disabled={loading}
-              className="px-3 py-2 rounded-xl text-sm font-semibold disabled:opacity-40 active:scale-95 transition-transform"
-              style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
-            >
-              {loading ? 'Loading…' : 'Refresh'}
-            </button>
+            <div className="relative group">
+              <button
+                onClick={onRefresh}
+                disabled={loading}
+                aria-label="Refresh"
+                className="w-8 h-8 flex items-center justify-center rounded-xl transition-colors disabled:opacity-40"
+                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+              >
+                <svg
+                  width="16" height="16" viewBox="0 0 16 16" fill="none"
+                  stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+                  className={loading ? 'animate-spin' : ''}
+                >
+                  <path d="M13.5 2.5A6.5 6.5 0 0 0 2 8"/><polyline points="2,5 2,2 5,2"/>
+                  <path d="M2.5 13.5A6.5 6.5 0 0 0 14 8"/><polyline points="14,11 14,14 11,14"/>
+                </svg>
+              </button>
+              <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50"
+                style={{ backgroundColor: 'var(--color-text)', color: 'var(--color-bg)' }}>
+                {loading ? 'Loading…' : 'Refresh'}
+              </span>
+            </div>
           )}
 
           {/* Auth */}
