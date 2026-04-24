@@ -445,23 +445,29 @@ export async function fetchAndSaveDigest(date?: string): Promise<Digest> {
       fetchCustomFeeds(),
     ])
 
-  // Per-source caps guarantee China coverage and prevent NewsAPI from crowding out all other sources.
-  // SCMP China is added first so its articles are never cut off by the 60-article Groq limit.
-  const sourceBatches: Array<{ result: PromiseSettledResult<RawArticle[]>; cap: number; label: string }> = [
-    { result: scmpChinaResult,  cap: 12, label: 'SCMP China'  },
-    { result: newsAPIResult,    cap: 28, label: 'NewsAPI'     },
-    { result: guardianResult,   cap: 14, label: 'Guardian'    },
-    { result: scmpWorldResult,  cap: 6,  label: 'SCMP World'  },
+  // Rank custom feed articles before building the main batch so they can be slotted in.
+  const customArticles = customResult.status === 'fulfilled'
+    ? await rankCustomArticles(customResult.value)
+    : []
+
+  // Per-source caps: SCMP China goes first (guaranteed China Politics coverage).
+  // Custom feeds are slotted second so they're always within the 60-article LLM window.
+  // Main sources reduced slightly (50 total) to reserve 10 slots for custom feeds.
+  const sourceBatches: Array<{ articles: RawArticle[]; cap: number; label: string }> = [
+    { articles: scmpChinaResult.status === 'fulfilled' ? scmpChinaResult.value : [],  cap: 12, label: 'SCMP China'    },
+    { articles: customArticles,                                                         cap: 10, label: 'Custom feeds'  },
+    { articles: newsAPIResult.status === 'fulfilled'   ? newsAPIResult.value   : [],  cap: 22, label: 'NewsAPI'       },
+    { articles: guardianResult.status === 'fulfilled'  ? guardianResult.value  : [],  cap: 12, label: 'Guardian'      },
+    { articles: scmpWorldResult.status === 'fulfilled' ? scmpWorldResult.value : [],  cap: 4,  label: 'SCMP World'    },
   ]
 
   const seen = new Set<string>()
   const all: RawArticle[] = []
   const imageMap = new Map<string, string>()
 
-  for (const { result, cap, label } of sourceBatches) {
-    if (result.status !== 'fulfilled') continue
+  for (const { articles, cap, label } of sourceBatches) {
     let added = 0
-    for (const a of result.value) {
+    for (const a of articles) {
       if (added >= cap) break
       if (!seen.has(a.url)) {
         seen.add(a.url)
@@ -471,16 +477,6 @@ export async function fetchAndSaveDigest(date?: string): Promise<Digest> {
       if (a.imageUrl && !imageMap.has(a.url)) imageMap.set(a.url, a.imageUrl)
     }
     console.log(`[fetch-news] ${label}: ${added} articles`)
-  }
-
-  if (customResult.status === 'fulfilled') {
-    const ranked = await rankCustomArticles(customResult.value)
-    let added = 0
-    for (const a of ranked) {
-      if (!seen.has(a.url)) { seen.add(a.url); all.push(a); added++ }
-      if (a.imageUrl && !imageMap.has(a.url)) imageMap.set(a.url, a.imageUrl)
-    }
-    console.log(`[fetch-news] Custom feeds: ${added} articles`)
   }
 
   console.log(`[fetch-news] ${all.length} unique articles · ${imageMap.size} with images`)
