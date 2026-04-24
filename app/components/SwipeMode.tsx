@@ -204,7 +204,7 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
         </div>
       </div>
 
-      <p className="text-center text-xs pb-2" style={{ color: 'var(--color-text-muted)' }}>
+      <p className="hidden md:block text-center text-xs pb-2" style={{ color: 'var(--color-text-muted)' }}>
         ← dislike · → like · ↑ back · Esc exit
       </p>
 

@@ -180,14 +180,33 @@ STEP 1 — FILTER OUT these entirely, do not include them under any category:
 - Academic or scientific research papers (e.g. journal articles, lab studies) — UNLESS the finding has immediate, major real-world policy, security, or health consequences
 - Local or regional news with no national/international significance
 - Opinion columns, editorials, or commentary pieces
+- Survey-based sentiment pieces, industry mood checks, think-tank commentary, and "confidence/optimism/pessimism" stories unless they contain a specific new policy, law, executive action, sanction, vote, military move, court ruling, or official statement by a major decision-maker
+- Vague process stories with no concrete new development
 - Routine corporate earnings, minor product launches, or press releases
 - Anything with a clickbait or tabloid-style title
+- Soft feature stories built around analysis, expectations, or anecdotal reactions instead of a clear factual event
+
+PREFER stories with a concrete contemporary development:
+- a law passed or proposed
+- an executive order, ministry notice, or agency action
+- sanctions, tariffs, export controls, or trade restrictions
+- a court ruling
+- a summit outcome or official diplomatic statement
+- military action, ceasefire, or security incident
+- a central bank, treasury, or regulator decision
+- an official company action with public consequences such as layoffs, mergers, bans, recalls, or plant closures
+
+AVOID choosing stories whose main news value is that someone "said", "warned", "signaled", "expects", or "feels" something unless the speaker is a head of state, central bank chief, cabinet minister, top regulator, or equivalent decision-maker and the statement itself moves policy or markets.
 
 STEP 2 — WRITE a 1–2 sentence summary that a general audience with no prior context can understand:
 - Sentence 1: Say what happened, with numbers and names. Example: "The Federal Reserve held interest rates steady at 4.25–4.5%, its benchmark borrowing rate, citing persistent inflation."
 - Sentence 2 (when needed): Explain why it matters or what it means for ordinary people. Example: "Higher rates make mortgages, car loans, and credit cards more expensive."
 - ALWAYS define acronyms and jargon on first use — never assume the reader knows what S&P 500, Nasdaq, M&A, CPI, FOMC, PBoC, or any index/agency/abbreviation means. Write it out: "the S&P 500, a stock index tracking 500 large US companies" or "M&A (merger and acquisition activity)".
+- ALWAYS identify organizations and institutions that are not universally known. Example: write "AmCham China, a business lobby representing American companies in China," not just "AmCham China."
+- ALWAYS explain abstract words like "security", "reform", "support", "controls", or "pressure" by saying what they actually refer to in the story.
 - ALWAYS identify who companies are if they are not household names: not "Deutsche Telekom" but "Deutsche Telekom, Germany's state-backed phone carrier".
+- NEVER write a summary so vague that a reader could ask "what policy?" or "what security issue?" Fill in the missing noun.
+- If the underlying article is mostly opinion, vague analysis, or low-information commentary, do not include it.
 - Use your own knowledge to add context — do not just rephrase the headline.
 - Never start with: "Report:", "Sources say:", "Exclusive:", or similar hedges.
 - No metaphors, dramatic phrasing, or creative titles ("Art of AI War", "Delicate Extraction", etc.).
