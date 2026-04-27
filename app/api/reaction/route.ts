@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { saveReaction, getCategoryPreferences } from '@/lib/db'
+import { saveReaction, getCategoryPreferences, getSwipedUrls } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,14 +43,17 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   try {
     const session = await getServerSession(authOptions)
-    const preferences = session?.user?.id
-      ? await getCategoryPreferences(session.user.id)
-      : {}
-    return NextResponse.json({ preferences })
+    const [preferences, swipedUrls] = session?.user?.id
+      ? await Promise.all([
+          getCategoryPreferences(session.user.id),
+          getSwipedUrls(session.user.id),
+        ])
+      : [{}, []]
+    return NextResponse.json({ preferences, swipedUrls })
   } catch (err) {
     console.error('[api/reaction] Error:', err)
     return NextResponse.json(
-      { success: false, error: err instanceof Error ? err.message : String(err), preferences: {} },
+      { success: false, error: err instanceof Error ? err.message : String(err), preferences: {}, swipedUrls: [] },
       { status: 500 }
     )
   }

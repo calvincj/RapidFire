@@ -111,6 +111,14 @@ export async function saveReaction(
   )
 }
 
+export async function getSwipedUrls(userId: string): Promise<string[]> {
+  const result = await execute(
+    'SELECT url FROM user_reactions WHERE user_id = ?',
+    [userId]
+  )
+  return (result.rows as unknown as Array<{ url: string }>).map(r => String(r.url))
+}
+
 export interface CategoryPreference {
   likes: number
   dislikes: number

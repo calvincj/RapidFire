@@ -48,7 +48,7 @@ function flattenDigest(digest: Digest): Story[] {
 }
 
 export default function SwipeMode({ digest, digestDate, onExit }: Props) {
-  const [stories]  = useState<Story[]>(() => flattenDigest(digest))
+  const [stories, setStories]  = useState<Story[]>(() => flattenDigest(digest))
   const [index, setIndex]           = useState(0)
   const [history, setHistory]       = useState<number[]>([])
   const [slide, setSlide]           = useState<'like' | 'dislike' | null>(null)
@@ -102,18 +102,22 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
     return () => window.removeEventListener('keydown', handler)
   }, [react, goBack, onExit])
 
-  // Load existing preferences on mount
+  // Load existing preferences and filter already-swiped stories on mount
   useEffect(() => {
     fetch('/api/reaction').then(r => r.json()).then(d => {
       if (d.preferences) setPreferences(d.preferences)
+      if (d.swipedUrls?.length) {
+        const swiped = new Set<string>(d.swipedUrls)
+        setStories(s => s.filter(story => !swiped.has(story.url)))
+      }
     })
   }, [])
 
-  if (done) {
+  if (done || stories.length === 0) {
     return (
       <Summary
         preferences={preferences}
-        total={stories.length}
+        total={history.length}
         onExit={onExit}
         onBack={history.length > 0 ? goBack : undefined}
       />
