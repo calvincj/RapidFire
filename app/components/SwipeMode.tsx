@@ -65,10 +65,11 @@ function addLocalSwiped(digestDate: string, url: string) {
 }
 
 export default function SwipeMode({ digest, digestDate, onExit }: Props) {
-  const [stories]  = useState<Story[]>(() => {
+  const [{ stories, totalStories, startOffset }] = useState(() => {
     const all = flattenDigest(digest)
     const swiped = getLocalSwiped(digestDate)
-    return swiped.size > 0 ? all.filter(s => !swiped.has(s.url)) : all
+    const filtered = swiped.size > 0 ? all.filter(s => !swiped.has(s.url)) : all
+    return { stories: filtered, totalStories: all.length, startOffset: all.length - filtered.length }
   })
   const [index, setIndex]           = useState(0)
   const [history, setHistory]       = useState<number[]>([])
@@ -142,7 +143,8 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
     )
   }
 
-  const progress = Math.round((index / stories.length) * 100)
+  const globalIndex = startOffset + index
+  const progress = Math.round((globalIndex / totalStories) * 100)
 
   return (
     <div className="flex flex-col h-[calc(100vh-56px)]">
@@ -168,7 +170,7 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
           ← Read view
         </button>
 
-        <span>{index + 1} / {stories.length}</span>
+        <span>{globalIndex + 1} / {totalStories}</span>
 
         {/* Back button */}
         <button
