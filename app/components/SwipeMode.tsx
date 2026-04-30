@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { Digest } from '@/lib/types'
 
 const EMOJI: Record<string, string> = {
@@ -33,6 +33,56 @@ interface Props {
   digest: Digest
   digestDate: string
   onExit: () => void
+}
+
+// ── Explosion effect ──────────────────────────────────────────────────────────
+
+const EXPLOSION_COLORS = ['#ef4444', '#f97316', '#fbbf24', '#dc2626', '#fb923c', '#fef08a']
+
+function ExplosionEffect() {
+  const particles = useMemo(() => {
+    const count = 18
+    return Array.from({ length: count }, (_, i) => {
+      const angle = (i / count) * 360 + (i % 2 === 0 ? 8 : -8)
+      const dist = 55 + (i % 3) * 22
+      const size = 5 + (i % 4) * 2.5
+      return {
+        id: i,
+        color: EXPLOSION_COLORS[i % EXPLOSION_COLORS.length],
+        size,
+        tx: Math.cos((angle * Math.PI) / 180) * dist,
+        ty: Math.sin((angle * Math.PI) / 180) * dist,
+        delay: (i % 3) * 20,
+      }
+    })
+  }, [])
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 20 }}>
+      <style>{`
+        @keyframes rfParticleFly {
+          0%   { transform: translate(0,0) scale(1); opacity: 1; }
+          70%  { opacity: 0.8; }
+          100% { transform: translate(var(--rf-tx), var(--rf-ty)) scale(0.1); opacity: 0; }
+        }
+      `}</style>
+      {particles.map(p => (
+        <div
+          key={p.id}
+          style={{
+            position: 'absolute',
+            width: p.size,
+            height: p.size,
+            borderRadius: p.id % 4 === 0 ? '2px' : '50%',
+            backgroundColor: p.color,
+            '--rf-tx': `${p.tx}px`,
+            '--rf-ty': `${p.ty}px`,
+            animation: `rfParticleFly 380ms ease-out ${p.delay}ms forwards`,
+          } as React.CSSProperties}
+        />
+      ))}
+    </div>
+  )
 }
 
 function flattenDigest(digest: Digest): Story[] {
@@ -185,7 +235,8 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
       </div>
 
       {/* Card */}
-      <div className="flex-1 flex items-center justify-center px-4">
+      <div className="flex-1 flex items-center justify-center px-4 relative">
+        {slide === 'dislike' && <ExplosionEffect />}
         <div
           className="w-full max-w-sm rounded-2xl border overflow-hidden transition-all duration-[280ms]"
           style={{

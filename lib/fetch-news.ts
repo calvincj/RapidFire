@@ -410,27 +410,40 @@ async function categorize(articles: RawArticle[], date: string): Promise<Digest>
 async function fetchOGImage(url: string): Promise<string | null> {
   try {
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 6000)
+    const timer = setTimeout(() => controller.abort(), 8000)
     const res = await fetch(url, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; RapidFire/1.0; +https://github.com)' },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
     })
     clearTimeout(timer)
     if (!res.ok) return null
-    // Read only the first 20 KB — enough to find the <head> og:image tag
+    // Read up to 40 KB — some sites have heavy <head> before og:image
     const reader = res.body?.getReader()
     if (!reader) return null
     let html = ''
-    while (html.length < 20_000) {
+    while (html.length < 40_000) {
       const { done, value } = await reader.read()
       if (done || !value) break
       html += new TextDecoder().decode(value)
     }
     reader.cancel()
-    const m =
-      html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ??
-      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
-    return m?.[1] ?? null
+    // Try og:image (both attribute orders), then og:image:secure_url, then twitter:image
+    const patterns = [
+      /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
+      /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
+      /<meta[^>]+property=["']og:image:secure_url["'][^>]+content=["']([^"']+)["']/i,
+      /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image:secure_url["']/i,
+      /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i,
+      /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i,
+    ]
+    for (const p of patterns) {
+      const m = html.match(p)
+      if (m?.[1]) return m[1]
+    }
+    return null
   } catch {
     return null
   }
@@ -518,7 +531,9 @@ export async function fetchAndSaveDigest(date?: string): Promise<Digest> {
 
   const seen = new Set<string>()
   const all: RawArticle[] = []
+  // keyed by normalized URL (no trailing slash, no query/fragment) so minor LLM URL variations still hit
   const imageMap = new Map<string, string>()
+  const normalizeUrl = (u: string) => u.replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase()
 
   for (const { articles, cap, label } of sourceBatches) {
     let added = 0
@@ -529,7 +544,10 @@ export async function fetchAndSaveDigest(date?: string): Promise<Digest> {
         all.push(a)
         added++
       }
-      if (a.imageUrl && !imageMap.has(a.url)) imageMap.set(a.url, a.imageUrl)
+      if (a.imageUrl) {
+        const key = normalizeUrl(a.url)
+        if (!imageMap.has(key)) imageMap.set(key, a.imageUrl)
+      }
     }
     console.log(`[fetch-news] ${label}: ${added} articles`)
   }
@@ -552,7 +570,7 @@ export async function fetchAndSaveDigest(date?: string): Promise<Digest> {
   // Enrich bullets with images from source feeds first, then OG scraping for the rest
   for (const cat of digest.categories) {
     for (const bullet of cat.bullets) {
-      const img = imageMap.get(bullet.url)
+      const img = imageMap.get(normalizeUrl(bullet.url))
       if (img) bullet.imageUrl = img
     }
   }
