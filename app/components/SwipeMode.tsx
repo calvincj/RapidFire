@@ -35,53 +35,83 @@ interface Props {
   onExit: () => void
 }
 
-// ── Explosion effect ──────────────────────────────────────────────────────────
+// ── Burn effect ───────────────────────────────────────────────────────────────
 
-const EXPLOSION_COLORS = ['#ef4444', '#f97316', '#fbbf24', '#dc2626', '#fb923c', '#fef08a']
+// Ash chunks: large dark flakes that fall downward
+const ASH = [
+  { tx: -55, ty: 130, size: 14, rot: 200 }, { tx: 25,  ty: 155, size: 18, rot: -160 },
+  { tx: -20, ty: 110, size: 10, rot: 120  }, { tx: 65,  ty: 140, size: 16, rot: -220 },
+  { tx: -75, ty: 100, size: 12, rot: 180  }, { tx: 40,  ty: 125, size: 20, rot: -140 },
+  { tx: 5,   ty: 160, size: 11, rot: 240  }, { tx: -45, ty: 105, size: 15, rot: -190 },
+  { tx: 70,  ty: 115, size: 13, rot: 160  }, { tx: -10, ty: 145, size: 17, rot: -170 },
+]
+const ASH_COLORS = ['#1f2937', '#374151', '#4b5563', '#111827', '#6b7280']
 
-function ExplosionEffect() {
-  const particles = useMemo(() => {
-    const count = 18
-    return Array.from({ length: count }, (_, i) => {
-      const angle = (i / count) * 360 + (i % 2 === 0 ? 8 : -8)
-      const dist = 55 + (i % 3) * 22
-      const size = 5 + (i % 4) * 2.5
-      return {
-        id: i,
-        color: EXPLOSION_COLORS[i % EXPLOSION_COLORS.length],
-        size,
-        tx: Math.cos((angle * Math.PI) / 180) * dist,
-        ty: Math.sin((angle * Math.PI) / 180) * dist,
-        delay: (i % 3) * 20,
-      }
-    })
-  }, [])
+// Embers: small bright sparks that fly upward
+const EMBERS = [
+  { tx: -28, ty: -95  }, { tx: 18,  ty: -105 }, { tx: -52, ty: -72 },
+  { tx: 44,  ty: -85  }, { tx: 2,   ty: -115 }, { tx: -68, ty: -58 },
+  { tx: 58,  ty: -62  }, { tx: -18, ty: -100 }, { tx: 48,  ty: -78 },
+  { tx: -38, ty: -88  },
+]
+const EMBER_COLORS = ['#ef4444', '#f97316', '#fbbf24', '#dc2626', '#fed7aa']
 
+function BurnEffect() {
   return (
-    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 20 }}>
+    <>
       <style>{`
-        @keyframes rfParticleFly {
+        @keyframes rfFlame {
+          0%   { opacity: 0; }
+          18%  { opacity: 0.75; }
+          100% { opacity: 0; }
+        }
+        @keyframes rfAsh {
+          0%   { transform: translate(0,0) rotate(0deg) scale(1); opacity: 0.95; }
+          100% { transform: translate(var(--rf-tx), var(--rf-ty)) rotate(var(--rf-rot)) scale(0.25); opacity: 0; }
+        }
+        @keyframes rfEmber {
           0%   { transform: translate(0,0) scale(1); opacity: 1; }
-          70%  { opacity: 0.8; }
-          100% { transform: translate(var(--rf-tx), var(--rf-ty)) scale(0.1); opacity: 0; }
+          65%  { opacity: 0.7; }
+          100% { transform: translate(var(--rf-tx), var(--rf-ty)) scale(0); opacity: 0; }
         }
       `}</style>
-      {particles.map(p => (
-        <div
-          key={p.id}
-          style={{
+
+      {/* Fire overlay — covers the card exactly */}
+      <div style={{
+        position: 'absolute', inset: 0, borderRadius: '16px', pointerEvents: 'none', zIndex: 10,
+        background: 'linear-gradient(to top, rgba(239,68,68,0.85) 0%, rgba(249,115,22,0.6) 45%, rgba(251,191,36,0.35) 75%, transparent 100%)',
+        animation: 'rfFlame 310ms ease-out forwards',
+      }} />
+
+      {/* Ash particles — originate from card center, fall down */}
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 11 }}>
+        {ASH.map((p, i) => (
+          <div key={i} style={{
             position: 'absolute',
-            width: p.size,
-            height: p.size,
-            borderRadius: p.id % 4 === 0 ? '2px' : '50%',
-            backgroundColor: p.color,
-            '--rf-tx': `${p.tx}px`,
-            '--rf-ty': `${p.ty}px`,
-            animation: `rfParticleFly 380ms ease-out ${p.delay}ms forwards`,
-          } as React.CSSProperties}
-        />
-      ))}
-    </div>
+            width: p.size, height: p.size * 0.55,
+            borderRadius: '35%',
+            backgroundColor: ASH_COLORS[i % ASH_COLORS.length],
+            '--rf-tx': `${p.tx}px`, '--rf-ty': `${p.ty}px`, '--rf-rot': `${p.rot}deg`,
+            animation: `rfAsh ${360 + i * 22}ms ease-in ${i * 18}ms forwards`,
+          } as React.CSSProperties} />
+        ))}
+      </div>
+
+      {/* Ember sparks — fly upward like escaping fire */}
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 11 }}>
+        {EMBERS.map((p, i) => (
+          <div key={i} style={{
+            position: 'absolute',
+            width: 3 + (i % 3) * 2, height: 3 + (i % 3) * 2,
+            borderRadius: '50%',
+            backgroundColor: EMBER_COLORS[i % EMBER_COLORS.length],
+            boxShadow: `0 0 ${6 + (i % 3) * 3}px ${EMBER_COLORS[i % EMBER_COLORS.length]}`,
+            '--rf-tx': `${p.tx}px`, '--rf-ty': `${p.ty}px`,
+            animation: `rfEmber ${260 + i * 18}ms ease-out ${i * 12}ms forwards`,
+          } as React.CSSProperties} />
+        ))}
+      </div>
+    </>
   )
 }
 
@@ -235,13 +265,15 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
       </div>
 
       {/* Card */}
-      <div className="flex-1 flex items-center justify-center px-4 relative">
-        {slide === 'dislike' && <ExplosionEffect />}
+      <div className="flex-1 flex items-center justify-center px-4">
+        <div className="w-full max-w-sm relative">
+          {slide === 'dislike' && <BurnEffect />}
         <div
-          className="w-full max-w-sm rounded-2xl border overflow-hidden transition-all duration-[280ms]"
+          className="w-full rounded-2xl border overflow-hidden transition-all duration-[280ms]"
           style={{
-            borderColor: 'var(--color-border)',
+            borderColor: slide === 'dislike' ? '#ef4444' : 'var(--color-border)',
             backgroundColor: 'var(--color-surface)',
+            boxShadow: slide === 'dislike' ? '0 0 40px rgba(239,68,68,0.55)' : 'none',
             transform: slide === 'like'
               ? 'translateX(80px) rotate(4deg) scale(0.95)'
               : slide === 'dislike'
@@ -276,6 +308,7 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
               Read article →
             </a>
           </div>
+        </div>
         </div>
       </div>
 
