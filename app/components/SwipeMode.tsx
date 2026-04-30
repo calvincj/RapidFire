@@ -107,12 +107,12 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
   }, [slide, current, index, stories.length, digestDate])
 
   const goBack = useCallback(() => {
-    if (history.length === 0 || slide) return
+    if (history.length === 0) return
     const prev = history[history.length - 1]
     setHistory(h => h.slice(0, -1))
     setDone(false)
     setIndex(prev)
-  }, [history, slide])
+  }, [history])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -189,11 +189,12 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
       <div className="flex-1 flex items-center justify-center px-4">
         <div className="w-full max-w-sm">
         <div
-          className="w-full rounded-2xl border overflow-hidden transition-all duration-[280ms]"
+          className="w-full rounded-2xl border overflow-hidden"
           style={{
+            transition: 'transform 280ms ease, opacity 280ms ease',
             borderColor: slide === 'dislike' ? '#ef4444' : slide === 'like' ? '#22c55e' : 'var(--color-border)',
             backgroundColor: 'var(--color-surface)',
-            boxShadow: slide === 'dislike' ? '0 0 40px rgba(239,68,68,0.55)' : slide === 'like' ? '0 0 40px rgba(34,197,94,0.55)' : 'none',
+            boxShadow: slide === 'dislike' ? '0 0 44px rgba(239,68,68,0.7)' : slide === 'like' ? '0 0 44px rgba(34,197,94,0.7)' : 'none',
             transform: slide === 'like'
               ? 'translateX(80px) rotate(4deg) scale(0.95)'
               : slide === 'dislike'
