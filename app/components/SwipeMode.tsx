@@ -47,8 +47,29 @@ function flattenDigest(digest: Digest): Story[] {
   )
 }
 
+function localSwipedKey(digestDate: string) { return `rapidfire:swiped:${digestDate}` }
+
+function getLocalSwiped(digestDate: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(localSwipedKey(digestDate))
+    return new Set(raw ? (JSON.parse(raw) as string[]) : [])
+  } catch { return new Set() }
+}
+
+function addLocalSwiped(digestDate: string, url: string) {
+  try {
+    const key = localSwipedKey(digestDate)
+    const existing = JSON.parse(localStorage.getItem(key) ?? '[]') as string[]
+    localStorage.setItem(key, JSON.stringify([...existing, url]))
+  } catch {}
+}
+
 export default function SwipeMode({ digest, digestDate, onExit }: Props) {
-  const [stories, setStories]  = useState<Story[]>(() => flattenDigest(digest))
+  const [stories]  = useState<Story[]>(() => {
+    const all = flattenDigest(digest)
+    const swiped = getLocalSwiped(digestDate)
+    return swiped.size > 0 ? all.filter(s => !swiped.has(s.url)) : all
+  })
   const [index, setIndex]           = useState(0)
   const [history, setHistory]       = useState<number[]>([])
   const [slide, setSlide]           = useState<'like' | 'dislike' | null>(null)
@@ -60,6 +81,7 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
   const react = useCallback(async (reaction: 'like' | 'dislike') => {
     if (slide || !current) return
     setSlide(reaction)
+    addLocalSwiped(digestDate, current.url)
 
     try {
       const res = await fetch('/api/reaction', {
@@ -102,15 +124,11 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
     return () => window.removeEventListener('keydown', handler)
   }, [react, goBack, onExit])
 
-  // Load existing preferences and filter already-swiped stories on mount
+  // Load preferences on mount (localStorage already filtered stories synchronously)
   useEffect(() => {
     fetch('/api/reaction').then(r => r.json()).then(d => {
       if (d.preferences) setPreferences(d.preferences)
-      if (d.swipedUrls?.length) {
-        const swiped = new Set<string>(d.swipedUrls)
-        setStories(s => s.filter(story => !swiped.has(story.url)))
-      }
-    })
+    }).catch(() => {})
   }, [])
 
   if (done || stories.length === 0) {

@@ -1,5 +1,5 @@
 import Parser from 'rss-parser'
-import { saveDigest, getCustomFeeds, getCategoryPreferences } from './db'
+import { saveDigest, getCustomFeeds } from './db'
 import type { Digest } from './types'
 
 export function getPTDate(): string {
@@ -381,11 +381,14 @@ async function categorize(articles: RawArticle[], date: string): Promise<Digest>
   const groqKey = process.env.GROQ_API_KEY
   const geminiKey = process.env.GEMINI_API_KEY
 
+  let groqError: unknown = null
+
   if (groqKey) {
     try {
       console.log('[fetch-news] Categorizing with Groq…')
       return await categorizeWithGroq(articles, date, groqKey)
     } catch (err) {
+      groqError = err
       console.warn('[fetch-news] Groq failed, trying Gemini fallback:', err)
       if (!geminiKey) throw err
     }
@@ -394,7 +397,12 @@ async function categorize(articles: RawArticle[], date: string): Promise<Digest>
   if (!geminiKey) throw new Error('No LLM API key configured. Set GROQ_API_KEY or GEMINI_API_KEY.')
 
   console.log('[fetch-news] Categorizing with Gemini…')
-  return await categorizeWithGemini(articles, date, geminiKey)
+  try {
+    return await categorizeWithGemini(articles, date, geminiKey)
+  } catch (geminiErr) {
+    const groqMsg = groqError ? `\nGroq error: ${groqError}` : ''
+    throw new Error(`Gemini error: ${geminiErr}${groqMsg}`)
+  }
 }
 
 // ── OG image scraping ────────────────────────────────────────────────────────
@@ -458,16 +466,6 @@ async function fetchCustomFeeds(): Promise<RawArticle[]> {
 // Articles from high-liked categories bubble to the top; others are deprioritized.
 async function rankCustomArticles(articles: RawArticle[]): Promise<RawArticle[]> {
   if (articles.length === 0) return []
-  const prefs = await getCategoryPreferences()
-
-  // Average preference score across all rated categories (default 50 = neutral)
-  const avgScore = Object.values(prefs).length > 0
-    ? Object.values(prefs).reduce((s, p) => s + p.score, 0) / Object.values(prefs).length
-    : 50
-
-  // Keep articles whose category scores (if known) are above average, plus unknowns
-  // Since we don't know the category yet, we use the overall avg as a soft gate:
-  // return top 30 articles from custom feeds (Groq will categorize & filter them)
   return articles.slice(0, 30)
 }
 
