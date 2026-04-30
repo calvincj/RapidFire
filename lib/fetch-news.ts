@@ -240,6 +240,7 @@ FILTER OUT pure rhetoric stories with little factual value:
 - campaign-style taunts, boasts, grievances, or fraud claims
 - provocative quotes that do not announce a policy, order, sanction, vote, lawsuit, meeting outcome, or military move
 - personality-driven political drama without a concrete consequence
+EXCEPTION — do NOT filter: a central bank official, Fed chair, treasury secretary, or agency head making a concrete statement about their own tenure, resignation, or institutional independence. That IS a concrete development (it directly affects monetary policy or institutional continuity) and belongs in Finance or US Politics.
 
 STEP 2 — DEDUPLICATE before writing any summaries:
 Scan all headlines for articles that describe the same real-world event. Two articles are duplicates if they cover the same action (announcement, ruling, vote, decision, military move, arrest, etc.) by the same actor at the same time — even if the wording is completely different.
@@ -292,8 +293,8 @@ STEP 4 — SELECT the 3 Headliners using this strict priority order (highest fir
 STEP 5 — SORT into EXACTLY these 8 categories using these EXACT names and definitions:
 - "Headliner" — the 3 most globally significant stories (selected in Step 4)
 - "International Affairs" — geopolitics and foreign relations BETWEEN countries, excluding US domestic and China domestic stories
-- "Trade" — tariffs, export controls, trade agreements, sanctions, import/export bans
-- "Tech & AI" — technology industry, AI developments, cybersecurity, tech regulation (ONE combined category — never split into "Tech" and "AI" separately)
+- "Trade" — tariffs, export controls, trade agreements, sanctions, import/export bans. Do NOT use for space programs, national technology programs, or investment screening — those belong in Tech & AI, China Politics, or US Politics.
+- "Tech & AI" — technology industry, AI developments, cybersecurity, tech regulation, space technology, national space programs (Tiangong, Artemis, BeiDou, etc.), aerospace, semiconductors (ONE combined category — never split into "Tech" and "AI" separately). A story about China expanding its space station belongs here or in China Politics, never in Trade.
 - "US Politics" — US domestic politics: Congress, White House, federal agencies, US elections, Supreme Court
 - "China Politics" — CCP leadership decisions, Xi Jinping, Chinese domestic policy, Chinese government actions, Hong Kong; any story primarily about what China's government is doing internally goes here, NOT in International Affairs. THIS CATEGORY IS REQUIRED — the input always contains SCMP China articles, so you must always produce at least 3 China Politics bullets.
 - "Finance" — stock markets, central bank policy, banking, currencies, corporate finance, economic indicators
@@ -493,6 +494,7 @@ export async function fetchAndSaveDigest(date?: string): Promise<Digest> {
     newsAPIResult, guardianResult, nytResult,
     scmpChinaResult, scmpWorldResult,
     bbcWorldResult, bbcBusinessResult, alJazeeraResult,
+    reutersWorldResult, reutersBusinessResult,
     customResult,
   ] = await Promise.allSettled([
     fetchNewsAPIHeadlines(),
@@ -503,6 +505,8 @@ export async function fetchAndSaveDigest(date?: string): Promise<Digest> {
     fetchRSSFeed('https://feeds.bbci.co.uk/news/world/rss.xml', 'BBC World'),
     fetchRSSFeed('https://feeds.bbci.co.uk/news/business/rss.xml', 'BBC Business'),
     fetchRSSFeed('https://www.aljazeera.com/xml/rss/all.xml', 'Al Jazeera'),
+    fetchRSSFeed('https://feeds.reuters.com/reuters/topNews', 'Reuters Top'),
+    fetchRSSFeed('https://feeds.reuters.com/reuters/businessNews', 'Reuters Business'),
     fetchCustomFeeds(),
   ])
 
@@ -515,17 +519,22 @@ export async function fetchAndSaveDigest(date?: string): Promise<Digest> {
     ...(bbcWorldResult.status    === 'fulfilled' ? bbcWorldResult.value    : []),
     ...(bbcBusinessResult.status === 'fulfilled' ? bbcBusinessResult.value : []),
   ]
+  const reutersArticles = [
+    ...(reutersWorldResult.status    === 'fulfilled' ? reutersWorldResult.value    : []),
+    ...(reutersBusinessResult.status === 'fulfilled' ? reutersBusinessResult.value : []),
+  ]
 
   // Source order determines priority within the 70-article LLM window.
   // SCMP China first (guaranteed China Politics); custom feeds second (always visible).
   const sourceBatches: Array<{ articles: RawArticle[]; cap: number; label: string }> = [
     { articles: scmpChinaResult.status === 'fulfilled' ? scmpChinaResult.value : [], cap: 10, label: 'SCMP China'   },
     { articles: customArticles,                                                        cap: 10, label: 'Custom feeds' },
-    { articles: nytResult.status       === 'fulfilled' ? nytResult.value       : [], cap: 10, label: 'NYT'          },
-    { articles: bbcArticles,                                                           cap:  8, label: 'BBC'          },
+    { articles: nytResult.status       === 'fulfilled' ? nytResult.value       : [], cap:  8, label: 'NYT'          },
+    { articles: reutersArticles,                                                       cap:  8, label: 'Reuters'      },
+    { articles: bbcArticles,                                                           cap:  6, label: 'BBC'          },
     { articles: alJazeeraResult.status === 'fulfilled' ? alJazeeraResult.value : [], cap:  6, label: 'Al Jazeera'   },
-    { articles: newsAPIResult.status   === 'fulfilled' ? newsAPIResult.value   : [], cap: 14, label: 'NewsAPI'      },
-    { articles: guardianResult.status  === 'fulfilled' ? guardianResult.value  : [], cap:  8, label: 'Guardian'     },
+    { articles: newsAPIResult.status   === 'fulfilled' ? newsAPIResult.value   : [], cap: 12, label: 'NewsAPI'      },
+    { articles: guardianResult.status  === 'fulfilled' ? guardianResult.value  : [], cap:  6, label: 'Guardian'     },
     { articles: scmpWorldResult.status === 'fulfilled' ? scmpWorldResult.value : [], cap:  4, label: 'SCMP World'   },
   ]
 

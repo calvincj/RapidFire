@@ -36,16 +36,43 @@ interface Props {
 }
 
 
+// Must mirror DigestView's ALIASES and ORDER so swipe and reader show the same stories in the same sequence
+const CATEGORY_ORDER = [
+  'Headliner', 'International Affairs', 'Trade', 'Tech & AI',
+  'US Politics', 'China Politics', 'Finance', 'Critical Minerals',
+]
+const CATEGORY_ALIASES: Record<string, string> = {
+  'Tech': 'Tech & AI', 'AI': 'Tech & AI', 'Technology': 'Tech & AI',
+  'Artificial Intelligence': 'Tech & AI', 'Tech and AI': 'Tech & AI',
+  'Technology & AI': 'Tech & AI', 'Tech/AI': 'Tech & AI',
+  'Chinese Politics': 'China Politics', 'China Policy': 'China Politics',
+  'China': 'China Politics', 'CCP': 'China Politics', 'China News': 'China Politics',
+}
+
 function flattenDigest(digest: Digest): Story[] {
-  return digest.categories.flatMap(cat =>
-    cat.bullets.map(b => ({
-      text:     b.text,
-      url:      b.url,
-      category: cat.name,
-      emoji:    EMOJI[cat.name] ?? '📰',
-      imageUrl: b.imageUrl,
-    }))
-  )
+  // Merge aliases and sort into canonical order, matching DigestView's normalize()
+  const catMap = new Map<string, Digest['categories'][0]['bullets']>()
+  for (const cat of digest.categories) {
+    const name = CATEGORY_ALIASES[cat.name] ?? cat.name
+    const existing = catMap.get(name)
+    if (existing) existing.push(...cat.bullets)
+    else catMap.set(name, [...cat.bullets])
+  }
+  return Array.from(catMap.entries())
+    .sort(([a], [b]) => {
+      const ai = CATEGORY_ORDER.indexOf(a)
+      const bi = CATEGORY_ORDER.indexOf(b)
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
+    })
+    .flatMap(([name, bullets]) =>
+      bullets.map((b: Digest['categories'][0]['bullets'][0]) => ({
+        text:     b.text,
+        url:      b.url,
+        category: name,
+        emoji:    EMOJI[name] ?? '📰',
+        imageUrl: b.imageUrl,
+      }))
+    )
 }
 
 function localSwipedKey(digestDate: string) { return `rapidfire:swiped:${digestDate}` }
