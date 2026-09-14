@@ -81,6 +81,13 @@ export default function DigestClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, session?.user?.id])
 
+  // Deep link for the native iOS shell (ios-guard/) — it always loads ?mode=swipe so it lands
+  // directly on the Reels-style feed, since that's the only screen that signals completion back
+  // to the native shield. No-op for normal browser visits without that param.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('mode') === 'swipe') setMode('swipe')
+  }, [])
+
   const changeTheme = (t: ThemeId) => { setTheme(t); applyTheme(t); savePrefs(t) }
 
   const triggerFetch = useCallback(async (date: string) => {

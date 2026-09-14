@@ -92,6 +92,17 @@ function addLocalSwiped(digestDate: string, url: string) {
   } catch {}
 }
 
+// Native iOS wrapper bridge (see ios-guard/) — when RapidFire is loaded inside the native
+// shield app's WKWebView, it registers a "rapidfireBridge" message handler and listens for this
+// exact message to know the day's digest is fully read, so it can lift the Screen Time shield.
+// window.webkit is undefined in a normal browser, so this is a no-op there.
+function notifyNativeDigestCompleted(digestDate: string) {
+  try {
+    const webkit = (window as unknown as { webkit?: { messageHandlers?: { rapidfireBridge?: { postMessage: (msg: unknown) => void } } } }).webkit
+    webkit?.messageHandlers?.rapidfireBridge?.postMessage({ type: 'digestCompleted', date: digestDate })
+  } catch {}
+}
+
 export default function SwipeMode({ digest, digestDate, onExit }: Props) {
   const [{ stories, totalStories, startOffset }] = useState(() => {
     const all = flattenDigest(digest)
@@ -128,7 +139,7 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
     setTimeout(() => {
       setHistory(h => [...h, index])
       setSlide(null)
-      if (index + 1 >= stories.length) setDone(true)
+      if (index + 1 >= stories.length) { setDone(true); notifyNativeDigestCompleted(digestDate) }
       else setIndex(i => i + 1)
     }, 280)
   }, [slide, current, index, stories.length, digestDate])
@@ -141,7 +152,7 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
     setTimeout(() => {
       setHistory(h => [...h, index])
       setSlide(null)
-      if (index + 1 >= stories.length) setDone(true)
+      if (index + 1 >= stories.length) { setDone(true); notifyNativeDigestCompleted(digestDate) }
       else setIndex(i => i + 1)
     }, 280)
   }, [slide, current, index, stories.length, digestDate])
@@ -172,6 +183,12 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
       if (d.preferences) setPreferences(d.preferences)
     }).catch(() => {})
   }, [])
+
+  // Re-announce completion on mount if today's deck was already finished in a prior session
+  // (e.g. the native shell relaunched RapidFire before the shield was actually lifted).
+  useEffect(() => {
+    if (stories.length === 0) notifyNativeDigestCompleted(digestDate)
+  }, [stories.length, digestDate])
 
   if (done || stories.length === 0) {
     return (
