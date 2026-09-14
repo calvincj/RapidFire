@@ -1,3 +1,6 @@
+'use client'
+
+import { useState } from 'react'
 import type { Digest, Category, Bullet } from '@/lib/types'
 
 const CATEGORIES = [
@@ -72,50 +75,102 @@ export default function DigestView({ digest }: { digest: Digest }) {
 
   return (
     <div className="space-y-4">
-      {categories.map(cat => (
-        <section
-          key={cat.name}
-          className="rounded-2xl border p-5"
-          style={{
-            borderColor: 'var(--color-border)',
-            backgroundColor: 'var(--color-surface)',
-          }}
-        >
-          <h2
-            className="text-xs font-bold tracking-widest uppercase mb-4 flex items-center gap-2"
-            style={{ color: 'var(--color-text-2)' }}
+      {categories.map(cat => {
+        const isHeadliner = cat.name === 'Headliner'
+        return (
+          <section
+            key={cat.name}
+            className="rounded-2xl border p-5"
+            style={
+              isHeadliner
+                ? {
+                    borderColor: 'var(--color-accent)',
+                    backgroundColor: 'color-mix(in srgb, var(--color-accent) 7%, var(--color-surface))',
+                  }
+                : {
+                    borderColor: 'var(--color-border)',
+                    backgroundColor: 'var(--color-surface)',
+                  }
+            }
           >
-            <span>{EMOJI[cat.name] ?? '📰'}</span>
-            <span>{cat.name}</span>
-          </h2>
+            <h2
+              className="text-xs font-bold tracking-widest uppercase mb-4 flex items-center gap-2"
+              style={{ color: isHeadliner ? 'var(--color-accent)' : 'var(--color-text-2)' }}
+            >
+              <span>{EMOJI[cat.name] ?? '📰'}</span>
+              <span>{cat.name}</span>
+            </h2>
 
-          <ul className="space-y-3">
-            {cat.bullets.map((bullet, i) => (
-              <li key={i}>
-                <a
-                  href={bullet.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex gap-3 group"
-                >
-                  <span
-                    className="shrink-0 mt-0.5 select-none"
-                    style={{ color: 'var(--color-text-muted)' }}
-                  >
-                    →
-                  </span>
-                  <span
-                    className="text-base leading-snug transition-opacity group-hover:opacity-70"
-                    style={{ color: 'var(--color-text)' }}
-                  >
-                    {bullet.text}
-                  </span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+            <ul className="space-y-3">
+              {cat.bullets.map((bullet, i) => (
+                <li key={i}>
+                  {isHeadliner
+                    ? <HeadlinerBullet bullet={bullet} />
+                    : <PlainBullet bullet={bullet} />}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      })}
     </div>
+  )
+}
+
+function PlainBullet({ bullet }: { bullet: Bullet }) {
+  return (
+    <a
+      href={bullet.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex gap-3 group"
+    >
+      <span className="shrink-0 mt-0.5 select-none" style={{ color: 'var(--color-text-muted)' }}>
+        →
+      </span>
+      <span
+        className="text-base leading-snug transition-opacity group-hover:opacity-70"
+        style={{ color: 'var(--color-text)' }}
+      >
+        {bullet.text}
+      </span>
+    </a>
+  )
+}
+
+// Headliner gets a thumbnail — it's the 3 lead stories, worth the extra visual weight.
+// Every other category stays plain text so the digest is still fast to scan.
+function HeadlinerBullet({ bullet }: { bullet: Bullet }) {
+  const [imgFailed, setImgFailed] = useState(false)
+  const showImage = !!bullet.imageUrl && !imgFailed
+
+  return (
+    <a
+      href={bullet.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex gap-3 group items-start"
+    >
+      {showImage && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={bullet.imageUrl}
+          alt=""
+          onError={() => setImgFailed(true)}
+          className="shrink-0 w-20 h-16 rounded-lg object-cover"
+        />
+      )}
+      <span className="flex gap-3 min-w-0">
+        <span className="shrink-0 mt-0.5 select-none" style={{ color: 'var(--color-text-muted)' }}>
+          →
+        </span>
+        <span
+          className="text-base leading-snug transition-opacity group-hover:opacity-70"
+          style={{ color: 'var(--color-text)' }}
+        >
+          {bullet.text}
+        </span>
+      </span>
+    </a>
   )
 }

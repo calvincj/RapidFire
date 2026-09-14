@@ -217,8 +217,21 @@ export default function DigestClient({
 
         {/* ── Empty state ───────────────────────────────────── */}
         {!loading && !digest && !error && (
-          <div className="py-20 text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
-            No digest available for this date.
+          <div className="py-20 text-center" style={{ color: 'var(--color-text-muted)' }}>
+            <p className="text-sm mb-4">
+              {currentDate === todayDate
+                ? "Today's digest hasn't been fetched yet."
+                : 'No digest available for this date.'}
+            </p>
+            {currentDate === todayDate && (
+              <button
+                onClick={() => triggerFetch(currentDate)}
+                className="px-4 py-2 rounded-xl text-sm font-medium transition-opacity hover:opacity-90"
+                style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+              >
+                Fetch today's news
+              </button>
+            )}
           </div>
         )}
       </main>

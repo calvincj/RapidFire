@@ -227,7 +227,7 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
 
       {/* Card */}
       <div className="flex-1 flex items-center justify-center px-4">
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-md">
         <div
           className="w-full rounded-2xl border overflow-hidden"
           style={{
@@ -304,28 +304,37 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
 
 // ── Card image — key prop from parent resets failed state per story ────────────
 
-function CardImage({ imageUrl, emoji }: { imageUrl?: string; emoji: string }) {
-  const [failed, setFailed] = useState(false)
+// Taller than a fixed pixel height so the card actually fills the screen instead of floating
+// in a sea of empty space — scales with viewport height, capped so it stays sane on short screens.
+const CARD_IMAGE_HEIGHT = 'clamp(220px, 38vh, 420px)'
 
-  if (imageUrl && !failed) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={imageUrl}
-        alt=""
-        onError={() => setFailed(true)}
-        className="w-full object-cover"
-        style={{ height: '180px' }}
-      />
-    )
-  }
+function CardImage({ imageUrl, emoji }: { imageUrl?: string; emoji: string }) {
+  const [loaded, setLoaded] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const showImage = !!imageUrl && !failed
 
   return (
-    <div
-      className="w-full flex items-center justify-center text-5xl"
-      style={{ height: '120px', backgroundColor: 'var(--color-bg)' }}
-    >
-      {emoji}
+    <div className="relative w-full overflow-hidden" style={{ height: CARD_IMAGE_HEIGHT }}>
+      {/* Emoji placeholder is always underneath — visible immediately, and stays as the
+          fallback if the image fails. The photo crossfades in on top once it's actually loaded,
+          instead of leaving a blank rectangle while the network request is in flight. */}
+      <div
+        className="absolute inset-0 flex items-center justify-center text-6xl"
+        style={{ backgroundColor: 'var(--color-bg)' }}
+      >
+        {emoji}
+      </div>
+      {showImage && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={imageUrl}
+          alt=""
+          onLoad={() => setLoaded(true)}
+          onError={() => setFailed(true)}
+          className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"
+          style={{ opacity: loaded ? 1 : 0 }}
+        />
+      )}
     </div>
   )
 }
