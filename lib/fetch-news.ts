@@ -202,15 +202,15 @@ async function fetchNYTArticles(): Promise<RawArticle[]> {
 
 // ── LLM categorization ───────────────────────────────────────────────────────
 
-function buildCategorizeInput(articles: RawArticle[]): { selected: RawArticle[]; headlinesText: string; systemPrompt: string } {
-  // 90 articles: ~3k system + 90×46t headlines + 4k output ≈ 11k; fine for Groq and Gemini
-  const selected = articles.slice(0, 90)
+function buildCategorizeInput(articles: RawArticle[], maxArticles: number): { selected: RawArticle[]; headlinesText: string; systemPrompt: string } {
+  // Images are NOT sent to or requested from the LLM — they're reattached afterward from
+  // imageMap (source feeds + OG scraping), keyed by URL, regardless of what the LLM returns.
+  // Keeping images out of the prompt saves real input+output tokens (esp. output — a raw
+  // image URL per bullet was eating a meaningful chunk of the max_tokens budget).
+  const selected = articles.slice(0, maxArticles)
 
   const headlinesText = selected
-    .map((a, i) => {
-      const imgLine = a.imageUrl ? `\n    IMG: ${a.imageUrl}` : ''
-      return `[${i + 1}] ${a.title}\n    URL: ${a.url}${imgLine}`
-    })
+    .map((a, i) => `[${i + 1}] ${a.title}\n    URL: ${a.url}`)
     .join('\n\n')
 
   const systemPrompt = `You are a senior news editor curating a daily briefing for an informed reader who cares about geopolitics, economics, technology, and policy.
@@ -311,11 +311,8 @@ STRICT RULES:
 - Every bullet must include the original source URL
 - If a category (other than Headliner and China Politics) has no relevant stories today, omit it from the output entirely
 
-IMAGE PASS-THROUGH: Some articles in the input have an IMG line. For each bullet you write, if the source article had an IMG line, copy its value as "imageUrl" in the output. For deduplicated bullets (merged from multiple articles), use the imageUrl from any source article that has one. Omit "imageUrl" entirely if no source article had an IMG line.
-
 Return ONLY valid JSON, no markdown, no explanation:
-{ "date": "YYYY-MM-DD", "categories": [{ "name": "...", "bullets": [{ "text": "...", "url": "...", "imageUrl": "https://..." }] }] }
-(omit "imageUrl" from bullets that have no image)`
+{ "date": "YYYY-MM-DD", "categories": [{ "name": "...", "bullets": [{ "text": "...", "url": "..." }] }] }`
 
   return { selected, headlinesText, systemPrompt }
 }
@@ -325,8 +322,20 @@ function parseDigestJSON(raw: string): Digest {
   return JSON.parse(cleaned) as Digest
 }
 
+// Groq's free/on-demand tier caps openai/gpt-oss-120b at 8,000 tokens per minute — far too
+// tight for our full ~90-article, richly-instructed prompt (a 90-article request alone needs
+// ~11k). Groq is now the FALLBACK, so give it a deliberately smaller article window and a
+// tighter output budget to reliably fit under that ceiling.
+const GROQ_MAX_ARTICLES = 38
+const GROQ_MAX_TOKENS = 2700
+
+// Gemini's free tier (250,000 TPM, 1,500 requests/day) has huge headroom for this workload,
+// so it's the PRIMARY provider — the full article window goes here.
+const GEMINI_MAX_ARTICLES = 90
+const GEMINI_MAX_OUTPUT_TOKENS = 16000 // was 8192 — too easy to truncate mid-JSON on busy news days
+
 async function categorizeWithGroq(articles: RawArticle[], date: string, apiKey: string): Promise<Digest> {
-  const { headlinesText, systemPrompt } = buildCategorizeInput(articles)
+  const { headlinesText, systemPrompt } = buildCategorizeInput(articles, GROQ_MAX_ARTICLES)
 
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
@@ -338,7 +347,12 @@ async function categorizeWithGroq(articles: RawArticle[], date: string, apiKey: 
         { role: 'user', content: `Date: ${date}\n\nHeadlines:\n\n${headlinesText}` },
       ],
       temperature: 0.2,
-      max_tokens: 4000,
+      // gpt-oss-120b is a reasoning model — its chain-of-thought counts against max_tokens
+      // before it writes any JSON. Default 'medium' effort was burning the whole budget on
+      // reasoning and leaving nothing for the actual output. 'low' keeps it fast and leaves
+      // room for the response.
+      reasoning_effort: 'low',
+      max_tokens: GROQ_MAX_TOKENS,
       response_format: { type: 'json_object' },
     }),
   })
@@ -355,7 +369,7 @@ async function categorizeWithGroq(articles: RawArticle[], date: string, apiKey: 
 }
 
 async function categorizeWithGemini(articles: RawArticle[], date: string, apiKey: string): Promise<Digest> {
-  const { headlinesText, systemPrompt } = buildCategorizeInput(articles)
+  const { headlinesText, systemPrompt } = buildCategorizeInput(articles, GEMINI_MAX_ARTICLES)
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
@@ -367,7 +381,7 @@ async function categorizeWithGemini(articles: RawArticle[], date: string, apiKey
         contents: [{ role: 'user', parts: [{ text: `Date: ${date}\n\nHeadlines:\n\n${headlinesText}` }] }],
         generationConfig: {
           temperature: 0.2,
-          maxOutputTokens: 8192,
+          maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
           responseMimeType: 'application/json',
         },
       }),
@@ -389,27 +403,30 @@ async function categorize(articles: RawArticle[], date: string): Promise<Digest>
   const groqKey = process.env.GROQ_API_KEY
   const geminiKey = process.env.GEMINI_API_KEY
 
-  let groqError: unknown = null
+  // Gemini first: its free tier (250k TPM) comfortably fits our full-size prompt, whereas
+  // Groq's free tier (8k TPM on gpt-oss-120b) does not. Groq is the fast/cheap fallback,
+  // scaled down to fit its own ceiling.
+  let geminiError: unknown = null
 
-  if (groqKey) {
+  if (geminiKey) {
     try {
-      console.log('[fetch-news] Categorizing with Groq…')
-      return await categorizeWithGroq(articles, date, groqKey)
+      console.log('[fetch-news] Categorizing with Gemini…')
+      return await categorizeWithGemini(articles, date, geminiKey)
     } catch (err) {
-      groqError = err
-      console.warn('[fetch-news] Groq failed, trying Gemini fallback:', err)
-      if (!geminiKey) throw err
+      geminiError = err
+      console.warn('[fetch-news] Gemini failed, trying Groq fallback:', err)
+      if (!groqKey) throw err
     }
   }
 
-  if (!geminiKey) throw new Error('No LLM API key configured. Set GROQ_API_KEY or GEMINI_API_KEY.')
+  if (!groqKey) throw new Error('No LLM API key configured. Set GROQ_API_KEY or GEMINI_API_KEY.')
 
-  console.log('[fetch-news] Categorizing with Gemini…')
+  console.log('[fetch-news] Categorizing with Groq…')
   try {
-    return await categorizeWithGemini(articles, date, geminiKey)
-  } catch (geminiErr) {
-    const groqMsg = groqError ? `\nGroq error: ${groqError}` : ''
-    throw new Error(`Gemini error: ${geminiErr}${groqMsg}`)
+    return await categorizeWithGroq(articles, date, groqKey)
+  } catch (groqErr) {
+    const geminiMsg = geminiError ? `\nGemini error: ${geminiError}` : ''
+    throw new Error(`Groq error: ${groqErr}${geminiMsg}`)
   }
 }
 
@@ -541,9 +558,15 @@ export async function fetchAndSaveDigest(date?: string): Promise<Digest> {
   // SCMP China first (guaranteed China Politics); custom feeds second (always visible);
   // AI-industry feeds third so lab news (executive moves, safety/security incidents,
   // US/China distillation disputes) reliably makes the cut alongside the wire services.
+  // NewsAPI sits early (right after the guaranteed China/custom slots) because it alone covers
+  // Trade, Finance, Critical Minerals, and general Tech via several merged queries — if it gets
+  // crowded out, those categories go empty. This matters most when the LLM's article window is
+  // small (Groq's fallback caps at GROQ_MAX_ARTICLES); Gemini's full 90-article window fits
+  // everything regardless of order.
   const sourceBatches: Array<{ articles: RawArticle[]; cap: number; label: string }> = [
     { articles: scmpChinaResult.status === 'fulfilled' ? scmpChinaResult.value : [], cap: 10, label: 'SCMP China'   },
     { articles: customArticles,                                                        cap: 10, label: 'Custom feeds' },
+    { articles: newsAPIResult.status   === 'fulfilled' ? newsAPIResult.value   : [], cap: 12, label: 'NewsAPI'      },
     { articles: techCrunchAIResult.status === 'fulfilled' ? techCrunchAIResult.value : [], cap:  8, label: 'TechCrunch AI'  },
     { articles: arsTechnicaAIResult.status === 'fulfilled' ? arsTechnicaAIResult.value : [], cap:  6, label: 'Ars Technica AI' },
     { articles: wsjTechResult.status   === 'fulfilled' ? wsjTechResult.value   : [], cap:  6, label: 'WSJ Tech'      },
@@ -551,7 +574,6 @@ export async function fetchAndSaveDigest(date?: string): Promise<Digest> {
     { articles: reutersArticles,                                                       cap:  8, label: 'Reuters'      },
     { articles: bbcArticles,                                                           cap:  6, label: 'BBC'          },
     { articles: alJazeeraResult.status === 'fulfilled' ? alJazeeraResult.value : [], cap:  6, label: 'Al Jazeera'   },
-    { articles: newsAPIResult.status   === 'fulfilled' ? newsAPIResult.value   : [], cap: 12, label: 'NewsAPI'      },
     { articles: guardianResult.status  === 'fulfilled' ? guardianResult.value  : [], cap:  6, label: 'Guardian'     },
     { articles: scmpWorldResult.status === 'fulfilled' ? scmpWorldResult.value : [], cap:  4, label: 'SCMP World'   },
   ]
