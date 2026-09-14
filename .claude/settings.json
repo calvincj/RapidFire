@@ -4,7 +4,10 @@
       "Bash(curl -s -L --max-time 10 -A \"Mozilla/5.0 \\(compatible; RapidFire/1.0\\)\" \"https://www.npr.org/2025/04/29/nx-s1-5377946/supreme-court-voting-rights-act\")",
       "Bash(curl -s -L --max-time 10 -A \"Mozilla/5.0 \\(compatible; RapidFire/1.0; +https://github.com\\)\" \"https://apnews.com\")",
       "Bash(curl -s -L --max-time 10 -A \"Mozilla/5.0 \\(compatible; RapidFire/1.0; +https://github.com\\)\" \"https://www.theguardian.com/us-news/2025/apr/29/supreme-court-voting-rights\")",
-      "Bash(curl -s -L --max-time 15 -A \"Mozilla/5.0 \\(compatible; RapidFire/1.0; +https://github.com\\)\" \"https://www.theguardian.com/law/article/2024/jun/25/supreme-court-voting-rights-act\")"
+      "Bash(curl -s -L --max-time 15 -A \"Mozilla/5.0 \\(compatible; RapidFire/1.0; +https://github.com\\)\" \"https://www.theguardian.com/law/article/2024/jun/25/supreme-court-voting-rights-act\")",
+      "Bash(curl -s -L --max-time 10 -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/124.0.0.0 Safari/537.36' -H 'Accept: text/html,application/xhtml+xml' https://www.reuters.com/technology/artificial-intelligence/manus-ai/)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(curl -s -L --max-time 10 -A 'Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/124.0.0.0 Safari/537.36' -H 'Accept: text/html,application/xhtml+xml' -w '\\\\nHTTP_STATUS:%{http_code} FINAL_URL:%{url_effective}' https://www.reuters.com/business/finance/fed-holds-rates-steady/)"
     ]
   }
 }

@@ -101,30 +101,43 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
   })
   const [index, setIndex]           = useState(0)
   const [history, setHistory]       = useState<number[]>([])
-  const [slide, setSlide]           = useState<'like' | 'dislike' | null>(null)
+  const [slide, setSlide]           = useState<'like' | 'pass' | null>(null)
   const [preferences, setPreferences] = useState<Record<string, Preference>>({})
   const [done, setDone]             = useState(false)
 
   const current = stories[index]
 
-  const react = useCallback(async (reaction: 'like' | 'dislike') => {
+  // Right swipe: like + saves to category preferences
+  const swipeRight = useCallback(async () => {
     if (slide || !current) return
-    setSlide(reaction)
+    setSlide('like')
     addLocalSwiped(digestDate, current.url)
 
     try {
       const res = await fetch('/api/reaction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: current.url, category: current.category, reaction, digestDate }),
+        body: JSON.stringify({ url: current.url, category: current.category, reaction: 'like', digestDate }),
       })
-
       const data = await res.json()
       if (data.preferences) setPreferences(data.preferences)
     } catch (err) {
       console.error('[swipe-mode] Failed to save reaction:', err)
     }
 
+    setTimeout(() => {
+      setHistory(h => [...h, index])
+      setSlide(null)
+      if (index + 1 >= stories.length) setDone(true)
+      else setIndex(i => i + 1)
+    }, 280)
+  }, [slide, current, index, stories.length, digestDate])
+
+  // Left swipe: "not relevant to me" — marks as seen, no category penalty
+  const swipeLeft = useCallback(() => {
+    if (slide || !current) return
+    setSlide('pass')
+    addLocalSwiped(digestDate, current.url)
     setTimeout(() => {
       setHistory(h => [...h, index])
       setSlide(null)
@@ -144,14 +157,14 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight' || e.key === 'l') react('like')
-      if (e.key === 'ArrowLeft'  || e.key === 'h') react('dislike')
+      if (e.key === 'ArrowRight' || e.key === 'l') swipeRight()
+      if (e.key === 'ArrowLeft'  || e.key === 'h') swipeLeft()
       if (e.key === 'ArrowUp'    || e.key === 'b') goBack()
       if (e.key === 'Escape') onExit()
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [react, goBack, onExit])
+  }, [swipeRight, swipeLeft, goBack, onExit])
 
   // Load preferences on mount (localStorage already filtered stories synchronously)
   useEffect(() => {
@@ -219,12 +232,12 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
           className="w-full rounded-2xl border overflow-hidden"
           style={{
             transition: 'transform 280ms ease, opacity 280ms ease',
-            borderColor: slide === 'dislike' ? '#ef4444' : slide === 'like' ? '#22c55e' : 'var(--color-border)',
+            borderColor: slide === 'like' ? '#22c55e' : 'var(--color-border)',
             backgroundColor: 'var(--color-surface)',
-            boxShadow: slide === 'dislike' ? '0 0 44px rgba(239,68,68,0.7)' : slide === 'like' ? '0 0 44px rgba(34,197,94,0.7)' : 'none',
+            boxShadow: slide === 'like' ? '0 0 44px rgba(34,197,94,0.7)' : 'none',
             transform: slide === 'like'
               ? 'translateX(80px) rotate(4deg) scale(0.95)'
-              : slide === 'dislike'
+              : slide === 'pass'
               ? 'translateX(-80px) rotate(-4deg) scale(0.95)'
               : 'none',
             opacity: slide ? 0 : 1,
@@ -261,22 +274,22 @@ export default function SwipeMode({ digest, digestDate, onExit }: Props) {
       </div>
 
       <p className="hidden md:block text-center text-xs pb-2" style={{ color: 'var(--color-text-muted)' }}>
-        ← dislike · → like · ↑ back · Esc exit
+        ← pass · → like · ↑ back · Esc exit
       </p>
 
       {/* Action buttons */}
-      <div className="flex justify-center gap-8 px-4 pb-10">
+      <div className="flex justify-center items-center gap-5 px-4 pb-10">
         <button
-          onClick={() => react('dislike')}
+          onClick={swipeLeft}
           disabled={!!slide}
           className="w-16 h-16 rounded-full text-2xl font-bold flex items-center justify-center border-2 transition-transform active:scale-90 disabled:opacity-40"
-          style={{ borderColor: '#ef4444', color: '#ef4444', backgroundColor: 'var(--color-surface)' }}
-          title="Not interested (← arrow)"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)', backgroundColor: 'var(--color-surface)' }}
+          title="Not for me (← arrow)"
         >
           ✕
         </button>
         <button
-          onClick={() => react('like')}
+          onClick={swipeRight}
           disabled={!!slide}
           className="w-16 h-16 rounded-full text-2xl font-bold flex items-center justify-center border-2 transition-transform active:scale-90 disabled:opacity-40"
           style={{ borderColor: '#22c55e', color: '#22c55e', backgroundColor: 'var(--color-surface)' }}
