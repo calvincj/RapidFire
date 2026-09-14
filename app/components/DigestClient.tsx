@@ -120,14 +120,6 @@ export default function DigestClient({
     }
   }, [])
 
-  // Auto-fetch today's digest if missing
-  useEffect(() => {
-    if (!initialDigest && initialDate === todayDate) {
-      triggerFetch(initialDate)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   // Swipe mode takes over the full screen below the header
   if (mode === 'swipe' && digest) {
     return (

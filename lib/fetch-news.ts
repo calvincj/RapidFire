@@ -203,11 +203,14 @@ async function fetchNYTArticles(): Promise<RawArticle[]> {
 // ── LLM categorization ───────────────────────────────────────────────────────
 
 function buildCategorizeInput(articles: RawArticle[]): { selected: RawArticle[]; headlinesText: string; systemPrompt: string } {
-  // 70 articles: ~3k system + 70×46t headlines + 4k output ≈ 10k; fine for Groq and Gemini
-  const selected = articles.slice(0, 70)
+  // 90 articles: ~3k system + 90×46t headlines + 4k output ≈ 11k; fine for Groq and Gemini
+  const selected = articles.slice(0, 90)
 
   const headlinesText = selected
-    .map((a, i) => `[${i + 1}] ${a.title}\n    URL: ${a.url}`)
+    .map((a, i) => {
+      const imgLine = a.imageUrl ? `\n    IMG: ${a.imageUrl}` : ''
+      return `[${i + 1}] ${a.title}\n    URL: ${a.url}${imgLine}`
+    })
     .join('\n\n')
 
   const systemPrompt = `You are a senior news editor curating a daily briefing for an informed reader who cares about geopolitics, economics, technology, and policy.
@@ -241,6 +244,7 @@ FILTER OUT pure rhetoric stories with little factual value:
 - provocative quotes that do not announce a policy, order, sanction, vote, lawsuit, meeting outcome, or military move
 - personality-driven political drama without a concrete consequence
 EXCEPTION — do NOT filter: a central bank official, Fed chair, treasury secretary, or agency head making a concrete statement about their own tenure, resignation, or institutional independence. That IS a concrete development (it directly affects monetary policy or institutional continuity) and belongs in Finance or US Politics.
+EXCEPTION — do NOT filter: concrete developments at major AI labs (OpenAI, Anthropic, Google DeepMind, xAI, Meta AI, DeepSeek, Alibaba/Qwen, Mistral, etc.) — an executive's resignation or firing, a safety/security incident (e.g. a data or model leak, a breach, misuse by a state or military actor), an IP or model-distillation dispute between labs, a lawsuit, or a new export-control or safety regulation aimed at them. These are NOT "routine corporate" news — they belong in Tech & AI.
 
 STEP 2 — DEDUPLICATE before writing any summaries:
 Scan all headlines for articles that describe the same real-world event. Two articles are duplicates if they cover the same action (announcement, ruling, vote, decision, military move, arrest, etc.) by the same actor at the same time — even if the wording is completely different.
@@ -259,7 +263,7 @@ Examples of same-event pairs that MUST produce only ONE bullet:
 
 STEP 3 — WRITE a 1–2 sentence summary for a smart college-aged reader who follows current events:
 - Keep it readable, not minimal. Target roughly 22-40 words. Use a second sentence when needed for context, but every sentence must earn its place.
-- Sentence 1: state the concrete development with names, numbers, and timing.
+- Sentence 1: state the concrete development with names, numbers, and timing. Always use full given name + surname on first mention (write "Wang Yi" not "Wang", "Marco Rubio" not "Rubio"). Never refer to anyone by surname alone.
 - Sentence 2, if used: explain what changed, why it matters, or what the disputed issue actually is.
 - For bullets that merge multiple sources (from STEP 2), draw on all source articles to write a richer, more complete summary.
 - Assume the reader knows basic international affairs and major countries, leaders, and institutions. Do NOT over-explain common concepts like Beijing, Taipei, NATO, the European Union, Congress, or tariffs.
@@ -270,7 +274,7 @@ STEP 3 — WRITE a 1–2 sentence summary for a smart college-aged reader who fo
 - NEVER write a summary so vague that a reader could ask "what policy?" or "what security issue?" Fill in the missing noun.
 - NEVER use placeholder nouns without substance. Bad: "the tariff refund process has begun for businesses." Good: say who is refunding which tariffs to which businesses, under what ruling or policy change.
 - Prefer one concrete noun over a vague bundle. Replace "issues" with the actual items: tariffs, chip export controls, visa restrictions, military talks, or whatever the story is really about.
-- NEVER use filler phrases like "various issues, including", "in a move seen as", "has been seeking to", "amid ongoing tensions", or "according to observers".
+- NEVER use filler phrases like "various issues, including", "in a move seen as", "has been seeking to", "amid ongoing tensions", "according to observers", "highlighting tensions between", "underscoring tensions", "as tensions rise", "amid rising tensions", or "amid concerns about".
 - Prefer direct wording: use "praised" instead of "hailed", "said" instead of "signaled", "met" instead of "held talks" when that is what happened.
 - Use "the" for a specific known event when appropriate, for example "the May summit", not "a May summit".
 - Avoid obvious throat-clearing or scene-setting clauses unless they add essential new information.
@@ -307,8 +311,11 @@ STRICT RULES:
 - Every bullet must include the original source URL
 - If a category (other than Headliner and China Politics) has no relevant stories today, omit it from the output entirely
 
+IMAGE PASS-THROUGH: Some articles in the input have an IMG line. For each bullet you write, if the source article had an IMG line, copy its value as "imageUrl" in the output. For deduplicated bullets (merged from multiple articles), use the imageUrl from any source article that has one. Omit "imageUrl" entirely if no source article had an IMG line.
+
 Return ONLY valid JSON, no markdown, no explanation:
-{ "date": "YYYY-MM-DD", "categories": [{ "name": "...", "bullets": [{ "text": "...", "url": "..." }] }] }`
+{ "date": "YYYY-MM-DD", "categories": [{ "name": "...", "bullets": [{ "text": "...", "url": "...", "imageUrl": "https://..." }] }] }
+(omit "imageUrl" from bullets that have no image)`
 
   return { selected, headlinesText, systemPrompt }
 }
@@ -325,7 +332,7 @@ async function categorizeWithGroq(articles: RawArticle[], date: string, apiKey: 
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: 'openai/gpt-oss-120b',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Date: ${date}\n\nHeadlines:\n\n${headlinesText}` },
@@ -351,7 +358,7 @@ async function categorizeWithGemini(articles: RawArticle[], date: string, apiKey
   const { headlinesText, systemPrompt } = buildCategorizeInput(articles)
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -495,6 +502,7 @@ export async function fetchAndSaveDigest(date?: string): Promise<Digest> {
     scmpChinaResult, scmpWorldResult,
     bbcWorldResult, bbcBusinessResult, alJazeeraResult,
     reutersWorldResult, reutersBusinessResult,
+    techCrunchAIResult, arsTechnicaAIResult, wsjTechResult,
     customResult,
   ] = await Promise.allSettled([
     fetchNewsAPIHeadlines(),
@@ -507,6 +515,11 @@ export async function fetchAndSaveDigest(date?: string): Promise<Digest> {
     fetchRSSFeed('https://www.aljazeera.com/xml/rss/all.xml', 'Al Jazeera'),
     fetchRSSFeed('https://feeds.reuters.com/reuters/topNews', 'Reuters Top'),
     fetchRSSFeed('https://feeds.reuters.com/reuters/businessNews', 'Reuters Business'),
+    // AI-industry-specific coverage (lab drama, executive moves, safety/security incidents,
+    // distillation disputes between US/Chinese AI labs) that the generic wire feeds mostly miss.
+    fetchRSSFeed('https://techcrunch.com/category/artificial-intelligence/feed/', 'TechCrunch AI'),
+    fetchRSSFeed('https://arstechnica.com/ai/feed/', 'Ars Technica AI'),
+    fetchRSSFeed('https://feeds.a.dj.com/rss/RSSWSJD.xml', 'WSJ Tech'),
     fetchCustomFeeds(),
   ])
 
@@ -524,11 +537,16 @@ export async function fetchAndSaveDigest(date?: string): Promise<Digest> {
     ...(reutersBusinessResult.status === 'fulfilled' ? reutersBusinessResult.value : []),
   ]
 
-  // Source order determines priority within the 70-article LLM window.
-  // SCMP China first (guaranteed China Politics); custom feeds second (always visible).
+  // Source order determines priority within the LLM window (see the 90-article cap below).
+  // SCMP China first (guaranteed China Politics); custom feeds second (always visible);
+  // AI-industry feeds third so lab news (executive moves, safety/security incidents,
+  // US/China distillation disputes) reliably makes the cut alongside the wire services.
   const sourceBatches: Array<{ articles: RawArticle[]; cap: number; label: string }> = [
     { articles: scmpChinaResult.status === 'fulfilled' ? scmpChinaResult.value : [], cap: 10, label: 'SCMP China'   },
     { articles: customArticles,                                                        cap: 10, label: 'Custom feeds' },
+    { articles: techCrunchAIResult.status === 'fulfilled' ? techCrunchAIResult.value : [], cap:  8, label: 'TechCrunch AI'  },
+    { articles: arsTechnicaAIResult.status === 'fulfilled' ? arsTechnicaAIResult.value : [], cap:  6, label: 'Ars Technica AI' },
+    { articles: wsjTechResult.status   === 'fulfilled' ? wsjTechResult.value   : [], cap:  6, label: 'WSJ Tech'      },
     { articles: nytResult.status       === 'fulfilled' ? nytResult.value       : [], cap:  8, label: 'NYT'          },
     { articles: reutersArticles,                                                       cap:  8, label: 'Reuters'      },
     { articles: bbcArticles,                                                           cap:  6, label: 'BBC'          },
