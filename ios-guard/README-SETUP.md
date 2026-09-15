@@ -11,22 +11,24 @@ iOS SDK, no simulator, no way for me to compile or test any of it.** Treat this 
 draft, not verified-working code. Expect to fix a handful of small build errors the first time you
 open it in real Xcode — send me whatever Xcode's error panel says and I'll fix it from there.
 
-## 0. Do this first — it's the longest pole
+## 0. Do this first
 
-`Family Controls` is a **restricted entitlement**. Even to sideload an app to your own phone
-(no App Store involved), Apple requires you to request access to it:
+Correcting what an earlier draft of this doc said: there is **no Apple approval form to wait on**
+for your use case, and no request to submit. `Family Controls` actually has two separate
+entitlements:
 
-1. Go to [developer.apple.com/contact/request/family-controls-distribution](https://developer.apple.com/contact/request/family-controls-distribution) (or search
-   "Family Controls entitlement request" if that URL has moved) and submit the request under your
-   Apple Developer account. A free Apple ID works for local sideloading, but you may find the
-   entitlement request flow itself expects a paid Apple Developer Program membership ($99/yr) —
-   if the free-account request is rejected or the page doesn't let you submit, that's likely why.
-2. This can take anywhere from same-day to a couple of weeks. **Do this now, then come back** —
-   everything else below can be done while you wait, but you can't actually run the shield without
-   this being approved.
+- **Development** — what you need. Works immediately in Xcode, zero approval process, zero
+  waiting on Apple. **But it requires a paid Apple Developer Program membership ($99/yr)** — a
+  free Apple ID ("Personal Team" in Xcode) cannot use Family Controls at all; the capability won't
+  even appear in Xcode's capability list for a free account, full stop.
+- **Distribution** — the one that needs Apple's review/approval form. Only required for shipping
+  to TestFlight or the App Store. You're sideloading to your own phone only, so **you never need
+  this one**.
 
-If it gets denied for an individual/non-App-Store use case, tell me and we'll fall back to the
-Screen Time Downtime approach instead (weaker, but zero-dependency).
+So: **go pay for an Apple Developer Program membership** at
+[developer.apple.com/programs](https://developer.apple.com/programs) if you don't already have
+one, under the Apple ID you'll build with. That's it — no waiting period, no form, no approval
+gate. Once it's active you can move straight to step 1.
 
 ## 1. Create the Xcode project
 
@@ -106,7 +108,8 @@ the Family Controls capability — if not, add manually):
 1. Connect your iPhone via USB (or same-WiFi wireless debugging).
 2. Select your device as the run destination (not a simulator — Family Controls doesn't work in
    the simulator).
-3. In Xcode's Signing settings, select your Apple ID as the team, let it auto-manage signing.
+3. In Xcode's Signing settings, select your **paid Developer Program team** (not "Personal Team")
+   for both the app target and the ShieldMonitor target, and let Xcode auto-manage signing.
 4. On your phone: Settings → General → VPN & Device Management → trust your developer certificate
    the first time.
 5. Hit Run. First launch will prompt for Screen Time permission, then let you pick which apps to
@@ -123,7 +126,11 @@ day, never a hard lockout.
 ## What I couldn't verify from here
 
 - That the Swift actually compiles against the real SDKs (no Xcode on this machine).
-- The exact current shape of the Family Controls entitlement request process/timeline.
+- The Development-vs-Distribution entitlement split above is corroborated across Apple's own
+  forums and several independent write-ups as of this writing, but I couldn't load Apple's actual
+  doc pages directly to quote them verbatim (they didn't return real content to my fetch tool) —
+  if Xcode's capability list behaves differently than described, that's the ground truth, not this
+  doc.
 - Whether `ShieldSettings` behavior matches current iOS exactly — Apple has changed some of these
   APIs across iOS versions; if `store.shield.applications` or `FamilyActivitySelection`'s field
   names have shifted on your iOS/Xcode version, Xcode's autocomplete/error messages will tell you
